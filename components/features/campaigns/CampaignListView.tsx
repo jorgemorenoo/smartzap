@@ -42,7 +42,9 @@ const StatusBadge = ({ status }: { status: CampaignStatus }) => {
   };
 
   return (
-    <span className={`inline - flex items - center px - 2.5 py - 1 rounded - md text - xs font - medium border ${styles[status]} `}>
+    <span
+      className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium border whitespace-nowrap select-none ${styles[status]}`}
+    >
       {status === CampaignStatus.SENDING && (
         <span className="relative flex h-2 w-2 mr-1.5">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
