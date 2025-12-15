@@ -121,6 +121,25 @@ function maskTokenPreview(token: string | null | undefined): string {
   return `${t.slice(0, 3)}…${t.slice(-3)}(${t.length})`
 }
 
+function safeParseJson(raw: unknown): unknown | null {
+  if (raw == null) return null
+  if (typeof raw === 'object') return raw as any
+  if (typeof raw !== 'string') return null
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return null
+  }
+}
+
+function tryParseWebhookTimestampSeconds(ts: unknown): string | null {
+  const n = Number(ts)
+  if (!Number.isFinite(n) || n <= 0) return null
+  const d = new Date(n * 1000)
+  if (Number.isNaN(d.getTime())) return null
+  return d.toISOString()
+}
+
 // Meta Webhook Verification
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams
@@ -542,6 +561,74 @@ export async function POST(request: NextRequest) {
           const messageType = message.type
           const text = extractInboundText(message)
           console.log(`📩 Incoming message from ${from}: ${messageType} (Chatbot disabled)${text ? ` | text="${text}"` : ''}`)
+
+          // =================================================================
+          // WhatsApp Flows (MVP sem endpoint): captura submissão final
+          // interactive.type = 'nfm_reply' com response_json
+          // =================================================================
+          try {
+            const interactiveType = message?.interactive?.type
+            const nfm = message?.interactive?.nfm_reply
+
+            if (messageType === 'interactive' && interactiveType === 'nfm_reply' && nfm?.response_json) {
+              const messageId = (message?.id || '') as string
+              const phoneNumberId = (change?.value?.metadata?.phone_number_id || null) as string | null
+              const wabaId = (entry?.id || null) as string | null
+
+              const normalizedFrom = normalizePhoneNumber(from)
+
+              // Best-effort: resolve contact_id
+              let contactId: string | null = null
+              try {
+                const { data: contacts } = await supabase
+                  .from('contacts')
+                  .select('id')
+                  .eq('phone', normalizedFrom)
+                  .limit(1)
+
+                contactId = contacts?.[0]?.id ?? null
+              } catch {
+                // ignore (best-effort)
+              }
+
+              const responseRaw = typeof nfm.response_json === 'string' ? nfm.response_json : JSON.stringify(nfm.response_json)
+              const responseJson = safeParseJson(nfm.response_json)
+              const messageTimestamp = tryParseWebhookTimestampSeconds(message?.timestamp)
+
+              const flowId = (nfm?.flow_id || nfm?.flowId || null) as string | null
+              const flowName = (nfm?.name || null) as string | null
+              const flowToken = (nfm?.flow_token || nfm?.flowToken || null) as string | null
+
+              if (messageId) {
+                const { error: upsertError } = await supabase
+                  .from('flow_submissions')
+                  .upsert(
+                    {
+                      message_id: messageId,
+                      from_phone: normalizedFrom,
+                      contact_id: contactId,
+                      flow_id: flowId,
+                      flow_name: flowName,
+                      flow_token: flowToken,
+                      response_json_raw: responseRaw,
+                      response_json: responseJson,
+                      waba_id: wabaId,
+                      phone_number_id: phoneNumberId,
+                      message_timestamp: messageTimestamp,
+                    },
+                    { onConflict: 'message_id' }
+                  )
+
+                if (upsertError) {
+                  console.warn('[Webhook] Falha ao persistir flow_submissions:', upsertError)
+                } else {
+                  console.log(`🧾 Flow submission salva (message_id=${messageId}, from=${maskPhone(normalizedFrom)})`)
+                }
+              }
+            }
+          } catch (e) {
+            console.warn('[Webhook] Falha ao processar Flow submission (best-effort):', e)
+          }
 
           // Opt-out real: usuário envia palavra-chave
           if (text && isOptOutKeyword(text)) {

@@ -31,6 +31,31 @@ interface DispatchContactResolved {
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
+function isMissingOnConflictConstraintError(err: any): boolean {
+  const msg = String(err?.message || '').toLowerCase()
+  // Postgres: "there is no unique or exclusion constraint matching the ON CONFLICT specification"
+  return msg.includes('no unique') && msg.includes('on conflict')
+}
+
+function isUpsertDuplicateInputError(err: any): boolean {
+  const msg = String(err?.message || '').toLowerCase()
+  // Postgres: "ON CONFLICT DO UPDATE command cannot affect row a second time"
+  return msg.includes('cannot affect row a second time')
+}
+
+function dedupeBy<T>(items: T[], keyFn: (x: T) => string): T[] {
+  const seen = new Set<string>()
+  const out: T[] = []
+  for (const it of items) {
+    const k = keyFn(it)
+    if (!k) continue
+    if (seen.has(k)) continue
+    seen.add(k)
+    out.push(it)
+  }
+  return out
+}
+
 // Generate simple ID
 // Trigger campaign dispatch workflow
 export async function POST(request: NextRequest) {
@@ -194,8 +219,18 @@ export async function POST(request: NextRequest) {
     return { ...c, contactId, contact_id: undefined }
   })
 
+  // Hardening extra: dedupe por contactId para evitar erro do Postgres:
+  // "ON CONFLICT DO UPDATE command cannot affect row a second time"
+  // quando o payload contém o mesmo contato repetido.
+  const dedupedInput = dedupeBy(normalizedInput, (c) => String(c.contactId || ''))
+  if (dedupedInput.length !== normalizedInput.length) {
+    console.warn(
+      `[Dispatch] Payload tinha ${normalizedInput.length - dedupedInput.length} contato(s) duplicado(s) por contactId; dedupe aplicado.`
+    )
+  }
+
   // 2) Tentar resolver contactId faltante via contacts.phone
-  const missingId = normalizedInput.filter((c) => !c.contactId)
+  const missingId = dedupedInput.filter((c) => !c.contactId)
   if (missingId.length > 0) {
     const phoneCandidates = Array.from(
       new Set(
@@ -230,7 +265,7 @@ export async function POST(request: NextRequest) {
         idByPhone.set(String(row.phone), String(row.id))
       }
 
-      for (const c of normalizedInput) {
+      for (const c of dedupedInput) {
         if (c.contactId) continue
         const raw = String(c.phone || '').trim()
         const normalized = raw ? normalizePhoneNumber(raw) : ''
@@ -241,7 +276,7 @@ export async function POST(request: NextRequest) {
 
   // 3) Se ainda houver contato sem ID, bloqueia para evitar dados inconsistentes.
   //    (Isso elimina definitivamente o caminho "sem contactId" no workflow.)
-  const stillMissing = normalizedInput.filter((c) => !c.contactId)
+  const stillMissing = dedupedInput.filter((c) => !c.contactId)
   if (stillMissing.length > 0) {
     return NextResponse.json(
       {
@@ -294,7 +329,7 @@ export async function POST(request: NextRequest) {
   const validContacts: DispatchContactResolved[] = []
   const skippedContacts: Array<{ contact: DispatchContact; code: string; reason: string; normalizedPhone?: string }> = []
 
-  for (const c of normalizedInput) {
+  for (const c of dedupedInput) {
     const contactId = c.contactId
 
     // Opt-out global (contacts.status)
@@ -393,23 +428,59 @@ export async function POST(request: NextRequest) {
       skipped_at: nowIso,
       skip_code: code,
       skip_reason: reason,
-      error: null,
+      // Compat + integridade: o schema tem CHECK que exige failure_reason OU error quando status='skipped'
+      // (ver campaign_contacts_skipped_reason_check).
+      failure_reason: reason,
+      error: reason,
     }))
 
-    const allRows = [...rowsPending, ...rowsSkipped]
-    if (allRows.length) {
-      const { error } = await supabase
-        .from('campaign_contacts')
-        .upsert(allRows, { onConflict: 'campaign_id, contact_id' })
+    // Monta todas as linhas e dedupe pela chave de idempotência.
+    // Preferimos "pending" quando houver colisão (contato válido vence).
+    const allRows = [...rowsSkipped, ...rowsPending]
 
-      if (error) throw error
+    const dedupedRows = dedupeBy(allRows, (r) => `${String(r.campaign_id)}::${String(r.contact_id)}`)
+    if (allRows.length) {
+      // Padrão atual: UNIQUE(campaign_id, contact_id)
+      let tried = 'campaign_id, contact_id'
+      let { error } = await supabase
+        .from('campaign_contacts')
+        .upsert(dedupedRows, { onConflict: tried })
+
+      // Compat/legacy: alguns bancos antigos ainda podem ter UNIQUE(campaign_id, phone)
+      if (error && isMissingOnConflictConstraintError(error)) {
+        console.warn('[Dispatch] onConflict campaign_id,contact_id não existe. Tentando fallback campaign_id,phone (legacy).')
+        tried = 'campaign_id, phone'
+        ;({ error } = await supabase
+          .from('campaign_contacts')
+          .upsert(
+            // para esse fallback, a chave vira (campaign_id, phone)
+            dedupeBy(allRows, (r) => `${String(r.campaign_id)}::${String(r.phone)}`),
+            { onConflict: tried }
+          ))
+      }
+
+      if (error) {
+        ;(error as any).__dispatch_on_conflict = tried
+        throw error
+      }
     }
 
     console.log(`[Dispatch] Pré-check: ${validContacts.length} válidos, ${skippedContacts.length} ignorados (skipped)`)
   } catch (error) {
     console.error('[Dispatch] Failed to persist pre-check results:', error)
+    const details = error instanceof Error ? error.message : String(error)
+    const tried = (error as any)?.__dispatch_on_conflict
     return NextResponse.json(
-      { error: 'Falha ao salvar validação de contatos' },
+      {
+        error: 'Falha ao salvar validação de contatos',
+        details,
+        hint: isMissingOnConflictConstraintError(error)
+          ? 'O banco parece não ter a constraint UNIQUE esperada para o upsert. Verifique se a migration 0001 (UNIQUE(campaign_id, contact_id)) foi aplicada no Supabase; se não, aplique e tente novamente.'
+          : isUpsertDuplicateInputError(error)
+            ? 'O payload tinha contatos duplicados na mesma campanha. O backend tentou deduplicar, mas ainda ocorreu conflito; verifique se há contatos repetidos (mesmo contactId/phone) na seleção.'
+            : undefined,
+        onConflictTried: tried || 'campaign_id, contact_id',
+      },
       { status: 500 }
     )
   }

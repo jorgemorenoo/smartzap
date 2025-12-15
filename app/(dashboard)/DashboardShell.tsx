@@ -516,6 +516,7 @@ export function DashboardShell({
         { path: '/campaigns', label: 'Campanhas', icon: MessageSquare },
         { path: '/workflows', label: 'Workflows', icon: Workflow, hidden: true }, // TODO: In development
         { path: '/conversations', label: 'Conversas', icon: MessageCircle, hidden: true },
+        { path: '/flows', label: 'Flows', icon: Workflow },
         { path: '/templates', label: 'Templates', icon: FileText },
         { path: '/contacts', label: 'Contatos', icon: Users },
         { path: '/settings', label: 'Configurações', icon: Settings },
@@ -529,6 +530,7 @@ export function DashboardShell({
         if (path === '/workflows') return 'Workflows'
         if (path === '/conversations') return 'Conversas'
         if (path.startsWith('/conversations/')) return 'Conversa'
+        if (path === '/flows') return 'Flows'
         if (path === '/templates') return 'Templates'
         if (path.startsWith('/contacts')) return 'Contatos'
         if (path.startsWith('/settings')) return 'Configurações'
