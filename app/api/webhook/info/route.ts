@@ -38,6 +38,13 @@ export async function GET() {
       vercelUrl: process.env.VERCEL_URL || null,
       vercelProjectProductionUrl: process.env.VERCEL_PROJECT_PRODUCTION_URL || null,
       appUrl: process.env.NEXT_PUBLIC_APP_URL || null,
+      env: {
+        hasSupabaseUrl: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL),
+        hasSupabasePublishableKey: Boolean(process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY),
+        hasSupabaseSecretKey: Boolean(process.env.SUPABASE_SECRET_KEY),
+        hasQstashToken: Boolean(process.env.QSTASH_TOKEN),
+        hasAuthSecret: Boolean(process.env.AUTH_SECRET),
+      },
       gitCommitSha: process.env.VERCEL_GIT_COMMIT_SHA || null,
       gitCommitRef: process.env.VERCEL_GIT_COMMIT_REF || null,
       gitCommitMessage: process.env.VERCEL_GIT_COMMIT_MESSAGE || null,
