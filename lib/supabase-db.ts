@@ -120,7 +120,12 @@ export const campaignDb = {
     }): Promise<Campaign> => {
         const id = generateId()
         const now = new Date().toISOString()
-        const status = campaign.scheduledAt ? CampaignStatus.SCHEDULED : CampaignStatus.SENDING
+        // IMPORTANTE:
+        // Campanha NÃO deve iniciar como "Enviando" na criação.
+        // O envio só começa quando o workflow é enfileirado (dispatch) e o worker inicia.
+        // Caso o dispatch falhe (ex.: QSTASH_TOKEN ausente em preview), a campanha ficava
+        // eternamente em "Enviando" com tudo em pending.
+        const status = campaign.scheduledAt ? CampaignStatus.SCHEDULED : CampaignStatus.DRAFT
 
         const { data, error } = await supabase
             .from('campaigns')
@@ -138,7 +143,7 @@ export const campaignDb = {
                 skipped: 0,
                 created_at: now,
                 scheduled_date: campaign.scheduledAt,
-                started_at: campaign.scheduledAt ? null : now,
+                started_at: null,
             })
             .select()
             .single()
@@ -159,7 +164,7 @@ export const campaignDb = {
             failed: 0,
             createdAt: now,
             scheduledAt: campaign.scheduledAt,
-            startedAt: campaign.scheduledAt ? undefined : now,
+            startedAt: undefined,
         }
     },
 

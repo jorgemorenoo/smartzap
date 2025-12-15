@@ -188,8 +188,10 @@ export const campaignService = {
     }
 
     // 3. Dispatch to Backend immediately (Execution)
+    // Se o dispatch falhar (ex.: QSTASH_TOKEN ausente), precisamos falhar visivelmente
+    // para o usuário não ficar com campanha "Enviando" sem nada sair.
     if (selectedContacts && selectedContacts.length > 0) {
-      await campaignService.dispatchToBackend(newCampaign.id, templateName, selectedContacts, templateVariables);
+      await campaignService.dispatchToBackend(newCampaign.id, templateName, selectedContacts, templateVariables)
     }
 
     return newCampaign;
@@ -215,7 +217,7 @@ export const campaignService = {
   },
 
   // Internal: dispatch campaign to backend queue
-  dispatchToBackend: async (campaignId: string, templateName: string, contacts?: { id?: string; contactId?: string; name: string; phone: string; email?: string | null; custom_fields?: Record<string, unknown> }[], templateVariables?: { header: string[], body: string[], buttons?: Record<string, string> }): Promise<boolean> => {
+  dispatchToBackend: async (campaignId: string, templateName: string, contacts?: { id?: string; contactId?: string; name: string; phone: string; email?: string | null; custom_fields?: Record<string, unknown> }[], templateVariables?: { header: string[], body: string[], buttons?: Record<string, string> }): Promise<void> => {
     try {
       // Allow omitting contacts: backend will load from campaign_contacts (preferred for scheduled/clone/start).
       // When provided, contacts must include contactId to satisfy dispatch hardening.
@@ -234,13 +236,23 @@ export const campaignService = {
       });
 
       if (!response.ok) {
-        console.error('Dispatch failed:', await response.text());
-        return false;
+        const text = await response.text().catch(() => '')
+        let details = text
+        try {
+          const parsed = JSON.parse(text)
+          const base = parsed?.error || 'Falha ao iniciar envio'
+          const extra = parsed?.details ? String(parsed.details) : ''
+          details = extra ? `${base}: ${extra}` : base
+        } catch {
+          // keep raw text
+        }
+        console.error('Dispatch failed:', details)
+        throw new Error(details || 'Falha ao iniciar envio')
       }
-      return true;
+      return;
     } catch (error) {
       console.error('Failed to dispatch campaign to backend:', error);
-      return false;
+      throw error;
     }
   },
 
@@ -350,16 +362,16 @@ export const campaignService = {
 
     // Prefer backend to load recipients snapshot from campaign_contacts.
     // This avoids losing custom_fields when starting scheduled/duplicated campaigns.
-    const success = await campaignService.dispatchToBackend(
-      id,
-      campaignData.templateName,
-      undefined,
-      campaignData.templateVariables as { header: string[], body: string[], buttons?: Record<string, string> } | undefined
-    );
-
-    if (!success) {
-      console.error('❌ Failed to dispatch campaign to backend.');
-      return undefined;
+    try {
+      await campaignService.dispatchToBackend(
+        id,
+        campaignData.templateName,
+        undefined,
+        campaignData.templateVariables as { header: string[], body: string[], buttons?: Record<string, string> } | undefined
+      )
+    } catch (e) {
+      console.error('❌ Failed to dispatch campaign to backend:', e)
+      return undefined
     }
 
     // Clear scheduledAt once dispatch is queued (workflow will set status/startedAt).
