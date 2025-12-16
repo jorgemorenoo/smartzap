@@ -24,6 +24,44 @@ import type {
   MetaDiagnosticsResponse,
 } from '@/services/metaDiagnosticsService'
 
+const META_BUSINESS_LOCKED_CODE = 131031
+
+function hasMetaBusinessLockedEvidence(checks: MetaDiagnosticsCheck[]): {
+  locked: boolean
+  evidence?: { source: string; count?: number }
+} {
+  for (const c of checks) {
+    // Heurística 1: falhas recentes (detalhe.top[]) inclui o código
+    const top = (c.details as any)?.top
+    if (Array.isArray(top)) {
+      const found = top.find((x: any) => Number(x?.code) === META_BUSINESS_LOCKED_CODE)
+      if (found) {
+        return {
+          locked: true,
+          evidence: {
+            source: c.title || c.id,
+            count: typeof found?.count === 'number' ? found.count : undefined,
+          },
+        }
+      }
+    }
+
+    // Heurística 2: algum detalhe carrega o código diretamente
+    const code = (c.details as any)?.code
+    if (Number(code) === META_BUSINESS_LOCKED_CODE) {
+      return { locked: true, evidence: { source: c.title || c.id } }
+    }
+
+    // Heurística 3: mensagens de erro textuais
+    const msg = `${c.title} ${c.message} ${formatJsonMaybe(c.details)}`
+    if (msg.includes(String(META_BUSINESS_LOCKED_CODE)) || msg.toLowerCase().includes('business account locked')) {
+      return { locked: true, evidence: { source: c.title || c.id } }
+    }
+  }
+
+  return { locked: false }
+}
+
 function StatusBadge({ status }: { status: MetaDiagnosticsCheckStatus }) {
   const base = 'inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border text-xs font-medium'
   if (status === 'pass') return <span className={`${base} bg-emerald-500/10 border-emerald-500/20 text-emerald-200`}><CheckCircle2 size={14} /> OK</span>
@@ -44,6 +82,7 @@ function ActionButtons(props: {
   actions: MetaDiagnosticsAction[]
   onRunAction: (a: MetaDiagnosticsAction) => void
   disabled?: boolean
+  disabledReason?: string
 }) {
   const { actions } = props
   if (!actions?.length) return null
@@ -72,7 +111,13 @@ function ActionButtons(props: {
               onClick={() => props.onRunAction(a)}
               disabled={props.disabled}
               className="px-3 py-2 rounded-lg bg-primary-500 hover:bg-primary-400 text-black font-medium transition-colors text-sm inline-flex items-center gap-2 disabled:opacity-50"
-              title={a.endpoint ? `${a.method || 'POST'} ${a.endpoint}` : undefined}
+              title={
+                props.disabled
+                  ? props.disabledReason || 'Ação temporariamente indisponível'
+                  : a.endpoint
+                    ? `${a.method || 'POST'} ${a.endpoint}`
+                    : undefined
+              }
             >
               <Wand2 size={14} />
               {a.label}
@@ -102,6 +147,8 @@ export function MetaDiagnosticsView(props: {
 }) {
   const reportText = props.data?.report?.text || ''
   const { isCopied, copyToClipboard } = useCopyToClipboard({ timeout: 1800 })
+  const lock = React.useMemo(() => hasMetaBusinessLockedEvidence(props.checks), [props.checks])
+  const apiActionsDisabled = props.isActing || lock.locked
 
   return (
     <Page>
@@ -213,6 +260,49 @@ export function MetaDiagnosticsView(props: {
         </div>
       </div>
 
+      {lock.locked && (
+        <div className="mt-4 glass-panel rounded-2xl p-6 border border-red-500/20 bg-red-500/5">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <StatusBadge status="fail" />
+                <h3 className="text-sm font-semibold text-white truncate">Conta Business bloqueada (código {META_BUSINESS_LOCKED_CODE})</h3>
+              </div>
+              <div className="mt-2 text-sm text-gray-200">
+                A Meta bloqueou o Business Account. Enquanto isso estiver ativo, ações como “Ativar messages” e até envios podem falhar —
+                não há “auto-fix” via API aqui dentro.
+              </div>
+              <div className="mt-3 text-sm text-gray-300 space-y-1">
+                <div>
+                  <span className="text-gray-400">O que fazer:</span>
+                </div>
+                <ul className="list-disc pl-5 space-y-1">
+                  <li>Abra o Business Manager e verifique alertas de pagamento, verificação e qualidade da conta.</li>
+                  <li>Se não houver caminho de auto-resolução, abra um chamado no suporte da Meta para desbloqueio do WABA.</li>
+                  <li>Depois do desbloqueio, volte aqui e clique em “Atualizar” e então “Ativar messages”.</li>
+                </ul>
+              </div>
+              <div className="mt-3 text-xs text-gray-400">
+                Evidência: {lock.evidence?.source || 'diagnóstico'}
+                {typeof lock.evidence?.count === 'number' ? ` (ocorrências: ${lock.evidence.count})` : ''}
+              </div>
+            </div>
+
+            <div className="shrink-0">
+              <button
+                onClick={() => copyToClipboard(reportText)}
+                disabled={!reportText}
+                className="px-3 py-2 rounded-lg bg-white/5 text-white hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all text-sm font-medium inline-flex items-center gap-2 disabled:opacity-50"
+                title={reportText ? 'Copiar relatório para suporte' : 'Relatório indisponível'}
+              >
+                <Copy size={14} />
+                Copiar relatório
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Filters */}
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <div className="text-xs text-gray-400">Filtro:</div>
@@ -264,7 +354,16 @@ export function MetaDiagnosticsView(props: {
                 </div>
                 <div className="mt-2 text-sm text-gray-300">{c.message}</div>
 
-                <ActionButtons actions={c.actions || []} onRunAction={props.onRunAction} disabled={props.isActing} />
+                <ActionButtons
+                  actions={c.actions || []}
+                  onRunAction={props.onRunAction}
+                  disabled={apiActionsDisabled}
+                  disabledReason={
+                    lock.locked
+                      ? `Bloqueado pela Meta (código ${META_BUSINESS_LOCKED_CODE}). Resolva no Business Manager e tente novamente.`
+                      : 'Executando ação…'
+                  }
+                />
 
                 {c.details && (
                   <details className="mt-4">
