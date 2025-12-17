@@ -419,6 +419,212 @@ function getFriendlyCopy(check: MetaDiagnosticsCheck): { title: string; message:
   return { title: check.title, message: check.message }
 }
 
+function Pill({ tone, children }: { tone: 'ok' | 'warn' | 'fail' | 'neutral'; children: React.ReactNode }) {
+  const base = 'inline-flex items-center px-2 py-1 rounded-lg text-xs font-mono border'
+  if (tone === 'ok') return <span className={`${base} bg-emerald-500/10 border-emerald-500/20 text-emerald-200`}>{children}</span>
+  if (tone === 'warn') return <span className={`${base} bg-amber-500/10 border-amber-500/20 text-amber-200`}>{children}</span>
+  if (tone === 'fail') return <span className={`${base} bg-red-500/10 border-red-500/20 text-red-200`}>{children}</span>
+  return <span className={`${base} bg-white/5 border-white/10 text-gray-200`}>{children}</span>
+}
+
+function TokenScopesCard({ data, checks }: { data?: MetaDiagnosticsResponse; checks: MetaDiagnosticsCheck[] }) {
+  const dbgEnabled = Boolean(data?.debugTokenValidation?.enabled)
+  const scopesCheck = checks.find((c) => c.id === 'meta_token_scopes')
+  const mePermsCheck = checks.find((c) => c.id === 'meta_permissions')
+
+  const required = Array.isArray((scopesCheck?.details as any)?.required)
+    ? ((scopesCheck?.details as any).required as unknown[]).filter((x) => typeof x === 'string') as string[]
+    : ['whatsapp_business_messaging', 'whatsapp_business_management']
+
+  const foundScopes = Array.isArray((scopesCheck?.details as any)?.scopes)
+    ? ((scopesCheck?.details as any).scopes as unknown[]).filter((x) => typeof x === 'string') as string[]
+    : []
+
+  const missing = Array.isArray((scopesCheck?.details as any)?.missing)
+    ? ((scopesCheck?.details as any).missing as unknown[]).filter((x) => typeof x === 'string') as string[]
+    : required.filter((r) => !foundScopes.includes(r))
+
+  const granted = Array.isArray((mePermsCheck?.details as any)?.granted)
+    ? ((mePermsCheck?.details as any).granted as unknown[]).filter((x) => typeof x === 'string') as string[]
+    : []
+
+  const missingCritical = missing.includes('whatsapp_business_messaging')
+
+  return (
+    <div className="glass-panel rounded-2xl p-6 border border-white/10">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="text-xs text-gray-500">Token</div>
+          <div className="mt-2 text-sm text-white font-medium">Permissões (escopos) — checklist</div>
+          <div className="mt-2 text-sm text-gray-300">
+            Aqui você vê o que o token <b>realmente</b> tem (ideal: via <span className="font-mono">/debug_token</span>) e o que falta.
+          </div>
+        </div>
+        <div className="shrink-0">
+          <StatusBadge status={missing.length === 0 ? 'pass' : (missingCritical ? 'fail' : 'warn')} />
+        </div>
+      </div>
+
+      <div className="mt-4">
+        <div className="text-xs text-gray-400">Necessárias</div>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {required.map((s) => {
+            const ok = foundScopes.includes(s) || granted.includes(s)
+            return <Pill key={s} tone={ok ? 'ok' : 'fail'}>{s}</Pill>
+          })}
+        </div>
+      </div>
+
+      {missing.length > 0 && (
+        <div className="mt-4 bg-zinc-900/40 border border-white/10 rounded-xl p-4">
+          <div className="text-sm text-white font-semibold">Faltando</div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {missing.map((s) => (
+              <Pill key={s} tone={missingCritical && s === 'whatsapp_business_messaging' ? 'fail' : 'warn'}>{s}</Pill>
+            ))}
+          </div>
+          <div className="mt-3 text-xs text-gray-400">
+            Dica: se você gerou token de <b>System User</b>, confirme também se os ativos (WABA + Phone Number) foram atribuídos ao usuário do sistema.
+          </div>
+        </div>
+      )}
+
+      <details className="mt-4 bg-zinc-900/30 border border-white/10 rounded-xl p-4">
+        <summary className="cursor-pointer list-none flex items-center justify-between gap-3">
+          <div className="text-sm text-white">Ver detalhes (para suporte)</div>
+          <ChevronDown size={16} className="text-gray-400" />
+        </summary>
+        <div className="mt-3 space-y-3">
+          <div>
+            <div className="text-xs text-gray-400">Fonte principal</div>
+            <div className="mt-1 text-sm text-gray-200">
+              {dbgEnabled ? 'debug_token (recomendado)' : '/me/permissions (best-effort)'}
+            </div>
+          </div>
+          <div>
+            <div className="text-xs text-gray-400">Escopos encontrados</div>
+            {foundScopes.length ? (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {foundScopes.map((s) => (<Pill key={s} tone={required.includes(s) ? 'neutral' : 'neutral'}>{s}</Pill>))}
+              </div>
+            ) : (
+              <div className="mt-1 text-sm text-gray-400">—</div>
+            )}
+          </div>
+          <div>
+            <div className="text-xs text-gray-400">/me/permissions (quando disponível)</div>
+            {granted.length ? (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {granted.map((s) => (<Pill key={s} tone={'neutral'}>{s}</Pill>))}
+              </div>
+            ) : (
+              <div className="mt-1 text-sm text-gray-400">—</div>
+            )}
+          </div>
+        </div>
+      </details>
+
+      {!dbgEnabled && (
+        <div className="mt-4 text-xs text-gray-400">
+          Para ver escopos com prova (recomendado), habilite <b>Meta App ID/Secret</b> em <Link href="/settings" className="underline">Ajustes</Link>.
+        </div>
+      )}
+    </div>
+  )
+}
+
+type Simulate10033Response =
+  | { ok: true; simulated: true; attempt?: { objectId?: string; status?: number }; result?: { graphOk?: boolean; normalizedError?: { message?: string; code?: number | null; subcode?: number | null; fbtraceId?: string | null; type?: string | null } } }
+  | { ok: false; error: string; details?: any }
+
+function Simulate10033Card() {
+  const [isRunning, setIsRunning] = React.useState(false)
+  const [result, setResult] = React.useState<Simulate10033Response | null>(null)
+
+  const run = React.useCallback(async () => {
+    setIsRunning(true)
+    try {
+      const res = await fetch('/api/meta/diagnostics/simulate-10033', { method: 'POST' })
+      const json = (await res.json().catch(() => null)) as any
+      if (!res.ok) {
+        setResult({ ok: false, error: (json as any)?.error || 'Falha ao simular', details: (json as any)?.details || null })
+        return
+      }
+      setResult(json as Simulate10033Response)
+    } catch (e) {
+      setResult({ ok: false, error: 'Falha ao simular (rede/navegador).', details: { message: e instanceof Error ? e.message : String(e) } })
+    } finally {
+      setIsRunning(false)
+    }
+  }, [])
+
+  const normalized = (result as any)?.result?.normalizedError || null
+
+  return (
+    <div className="glass-panel rounded-2xl p-6 border border-white/10">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="text-xs text-gray-500">Simulador</div>
+          <div className="mt-2 text-sm text-white font-medium">Reproduzir erro 100/33 (sem enviar mensagem)</div>
+          <div className="mt-2 text-sm text-gray-300">
+            Útil pra aula/suporte: dispara o erro clássico de “ID/permissão” sem risco de mandar mensagem.
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={run}
+          disabled={isRunning}
+          className="px-3 py-2 rounded-lg bg-white/5 text-white hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all text-sm font-medium inline-flex items-center gap-2 disabled:opacity-50"
+          title="Executa um POST inválido em /{WABA_ID}/messages para gerar 100/33"
+        >
+          <Wand2 size={14} /> {isRunning ? 'Simulando…' : 'Simular agora'}
+        </button>
+      </div>
+
+      {result && (
+        <div className="mt-4 bg-zinc-900/40 border border-white/10 rounded-xl p-4">
+          {result.ok === false ? (
+            <>
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-sm text-white font-semibold">Falhou</div>
+                <StatusBadge status="fail" />
+              </div>
+              <div className="mt-2 text-sm text-gray-200">{result.error}</div>
+              {result.details && (
+                <pre className="mt-3 text-xs text-gray-300 overflow-auto whitespace-pre-wrap">{formatJsonMaybe(result.details)}</pre>
+              )}
+            </>
+          ) : (
+            <>
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-sm text-white font-semibold">Resultado</div>
+                <StatusBadge status="pass" />
+              </div>
+              <div className="mt-2 text-sm text-gray-200">
+                Endpoint testado: <span className="font-mono">/{'{'}WABA_ID{'}'}/messages</span> · status HTTP: <span className="font-mono">{String((result as any)?.attempt?.status ?? '—')}</span>
+              </div>
+              {normalized?.message && (
+                <div className="mt-3 text-sm text-gray-200">
+                  <div><span className="text-gray-400">Mensagem:</span> {String(normalized.message)}</div>
+                  <div className="mt-1 flex flex-wrap gap-2">
+                    <Pill tone="neutral">code: {String(normalized.code ?? '—')}</Pill>
+                    <Pill tone="neutral">subcode: {String(normalized.subcode ?? '—')}</Pill>
+                    {normalized.fbtraceId ? <Pill tone="neutral">fbtrace_id: {String(normalized.fbtraceId)}</Pill> : null}
+                  </div>
+                </div>
+              )}
+              <details className="mt-4">
+                <summary className="cursor-pointer text-sm text-gray-200 underline">Ver resposta bruta da Meta</summary>
+                <pre className="mt-3 text-xs text-gray-300 overflow-auto whitespace-pre-wrap">{formatJsonMaybe((result as any)?.result || null)}</pre>
+              </details>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function QuickStartCard(props: {
   checks: MetaDiagnosticsCheck[]
   onRunAction: (a: MetaDiagnosticsAction) => void
@@ -755,6 +961,11 @@ export function MetaDiagnosticsView(props: {
               : undefined
           }
         />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+        <TokenScopesCard data={props.data} checks={props.checks} />
+        <Simulate10033Card />
       </div>
 
       {hasGraph100_33 && (
