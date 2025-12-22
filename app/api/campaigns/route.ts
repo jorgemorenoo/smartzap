@@ -147,6 +147,7 @@ export async function POST(request: Request) {
         // QStash cannot reach localhost.
         // DEV fallback: schedule an in-process dispatch so scheduling works locally.
         const scheduledAtIso = new Date(data.scheduledAt).toISOString()
+        const dedupeSafeIso = scheduledAtIso.replace(/:/g, '_')
         const delayMs = Number.isFinite(scheduledMs) ? Math.max(0, scheduledMs - nowMs) : NaN
 
         console.warn('[Campaigns] scheduledAt set, but localhost detected; using local scheduler (dev-only).')
@@ -204,6 +205,7 @@ export async function POST(request: Request) {
       } else {
         const delaySeconds = Math.max(0, Math.floor((scheduledMs - nowMs) / 1000))
         const scheduledAtIso = new Date(data.scheduledAt).toISOString()
+        const dedupeSafeIso = scheduledAtIso.replace(/:/g, '_')
 
         try {
           const qstash = new QStashClient({ token: process.env.QSTASH_TOKEN })
@@ -219,7 +221,7 @@ export async function POST(request: Request) {
             delay: delaySeconds,
             retries: 3,
             // Dedup per campaign+scheduled time (best-effort)
-            deduplicationId: `schedule:${campaign.id}:${scheduledAtIso}`,
+            deduplicationId: `schedule-${campaign.id}-${dedupeSafeIso}`,
           })
 
           await campaignDb.updateStatus(campaign.id, {

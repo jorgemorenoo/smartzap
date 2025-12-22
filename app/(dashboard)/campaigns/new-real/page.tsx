@@ -127,6 +127,13 @@ export default function CampaignsNewRealPage() {
   const [precheckTotals, setPrecheckTotals] = useState<{ valid: number; skipped: number } | null>(null)
   const [precheckResult, setPrecheckResult] = useState<CampaignPrecheckResult | null>(null)
 
+  // Aplicar em massa (bulk) um campo personalizado para desbloquear ignorados.
+  const [bulkOpen, setBulkOpen] = useState(false)
+  const [bulkKey, setBulkKey] = useState<string>('')
+  const [bulkValue, setBulkValue] = useState<string>('')
+  const [bulkError, setBulkError] = useState<string | null>(null)
+  const [bulkLoading, setBulkLoading] = useState(false)
+
   // Correção (igual ao /new): abrir modal focado para corrigir contatos ignorados.
   const [quickEditContactId, setQuickEditContactId] = useState<string | null>(null)
   const [quickEditFocus, setQuickEditFocus] = useState<ContactFixFocus>(null)
@@ -635,6 +642,96 @@ export default function CampaignsNewRealPage() {
     return out
       .sort((a, b) => a.subtitle.localeCompare(b.subtitle, 'pt-BR'))
   }, [precheckResult, customFieldLabelByKey])
+
+  const bulkCustomFieldTargets = useMemo(() => {
+    const results = precheckResult?.results as any[] | undefined
+    if (!results || !Array.isArray(results)) return {} as Record<string, string[]>
+
+    const map: Record<string, Set<string>> = {}
+
+    for (const r of results) {
+      if (!r || r.ok) continue
+      if (r.skipCode !== 'MISSING_REQUIRED_PARAM') continue
+      if (!r.contactId) continue
+
+      const missing = Array.isArray(r.missing) ? (r.missing as any[]) : []
+      for (const m of missing) {
+        const inf = humanizeVarSource(String(m?.raw || ''), customFieldLabelByKey)
+        if (!inf.focus) continue
+        if (inf.focus.type !== 'custom_field') continue
+        const key = String(inf.focus.key || '').trim()
+        if (!key) continue
+        if (!map[key]) map[key] = new Set<string>()
+        map[key].add(String(r.contactId))
+      }
+    }
+
+    const out: Record<string, string[]> = {}
+    for (const [k, set] of Object.entries(map)) {
+      out[k] = Array.from(set)
+    }
+    return out
+  }, [precheckResult, customFieldLabelByKey])
+
+  const bulkKeys = useMemo(() => {
+    const keys = Object.keys(bulkCustomFieldTargets)
+    return keys.sort((a, b) => {
+      const ca = bulkCustomFieldTargets[a]?.length ?? 0
+      const cb = bulkCustomFieldTargets[b]?.length ?? 0
+      if (cb !== ca) return cb - ca
+      return a.localeCompare(b, 'pt-BR')
+    })
+  }, [bulkCustomFieldTargets])
+
+  useEffect(() => {
+    if (!bulkKeys.length) return
+    setBulkKey((prev) => (prev && bulkCustomFieldTargets[prev]?.length ? prev : bulkKeys[0]))
+  }, [bulkCustomFieldTargets, bulkKeys])
+
+  const applyBulkCustomField = async () => {
+    const key = bulkKey.trim()
+    const value = bulkValue.trim()
+    const contactIds = bulkCustomFieldTargets[key] || []
+
+    if (!key) {
+      setBulkError('Selecione um campo personalizado.')
+      return
+    }
+    if (!value) {
+      setBulkError('Informe o valor para aplicar.')
+      return
+    }
+    if (!contactIds.length) {
+      setBulkError('Nenhum contato elegível para esse campo.')
+      return
+    }
+
+    setBulkLoading(true)
+    setBulkError(null)
+    try {
+      const res = await fetch('/api/contacts/bulk-custom-field', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contactIds, key, value }),
+      })
+
+      if (!res.ok) {
+        const msg = await res.text().catch(() => '')
+        throw new Error(msg || 'Falha ao aplicar em massa.')
+      }
+
+      setBulkOpen(false)
+      setBulkValue('')
+      // Revalida para refletir o desbloqueio.
+      setTimeout(() => {
+        runPrecheck()
+      }, 0)
+    } catch (err) {
+      setBulkError((err as Error)?.message || 'Falha ao aplicar em massa.')
+    } finally {
+      setBulkLoading(false)
+    }
+  }
 
   const openQuickEdit = (item: { contactId: string; focus: ContactFixFocus; title: string }) => {
     setQuickEditContactId(item.contactId)
@@ -2059,6 +2156,21 @@ export default function CampaignsNewRealPage() {
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
+                          disabled={!bulkKeys.length}
+                          onClick={() => {
+                            setBulkError(null)
+                            setBulkOpen(true)
+                          }}
+                          className={`rounded-full border px-4 py-2 text-xs font-semibold ${
+                            bulkKeys.length
+                              ? 'border-amber-400/40 bg-amber-500/10 text-amber-200 hover:border-amber-300/60'
+                              : 'border-white/10 bg-zinc-950/40 text-gray-500'
+                          }`}
+                        >
+                          Aplicar em massa
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => runPrecheck()}
                           className="rounded-full border border-white/10 bg-zinc-950/40 px-4 py-2 text-xs font-semibold text-gray-200 hover:border-white/20"
                         >
@@ -2078,6 +2190,91 @@ export default function CampaignsNewRealPage() {
                         </button>
                       </div>
                     </div>
+
+                    {bulkOpen && (
+                      <div className="mt-4 rounded-xl border border-white/10 bg-zinc-950/40 p-4">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div>
+                            <p className="text-sm font-semibold text-white">Aplicar campo personalizado em massa</p>
+                            <p className="mt-1 text-xs text-gray-500">
+                              Preenche o campo selecionado para todos os contatos ignorados que estao faltando esse dado.
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (bulkLoading) return
+                              setBulkOpen(false)
+                              setBulkError(null)
+                            }}
+                            className={`text-xs ${bulkLoading ? 'text-gray-600' : 'text-gray-400 hover:text-white'}`}
+                          >
+                            Fechar
+                          </button>
+                        </div>
+
+                        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+                          <div className="space-y-2">
+                            <label className="text-xs uppercase tracking-widest text-gray-500">Campo</label>
+                            <select
+                              className="w-full rounded-xl border border-white/10 bg-zinc-950/40 px-3 py-2 text-sm text-white"
+                              value={bulkKey}
+                              onChange={(e) => setBulkKey(e.target.value)}
+                              disabled={bulkLoading}
+                            >
+                              {bulkKeys.map((k) => (
+                                <option key={k} value={k}>
+                                  {(customFieldLabelByKey[k] || k) + ` (${bulkCustomFieldTargets[k]?.length ?? 0})`}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div className="space-y-2 md:col-span-2">
+                            <label className="text-xs uppercase tracking-widest text-gray-500">Valor</label>
+                            <input
+                              className="w-full rounded-xl border border-white/10 bg-zinc-950/40 px-3 py-2 text-sm text-white placeholder:text-gray-600"
+                              placeholder="Ex.: teste"
+                              value={bulkValue}
+                              onChange={(e) => setBulkValue(e.target.value)}
+                              disabled={bulkLoading}
+                            />
+                            <p className="text-xs text-gray-600">
+                              Afetados: <span className="text-gray-400">{bulkKey ? (bulkCustomFieldTargets[bulkKey]?.length ?? 0) : 0}</span>
+                            </p>
+                          </div>
+                        </div>
+
+                        {bulkError && <p className="mt-3 text-xs text-amber-300">{bulkError}</p>}
+
+                        <div className="mt-4 flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (bulkLoading) return
+                              setBulkOpen(false)
+                              setBulkError(null)
+                            }}
+                            className="rounded-full border border-white/10 bg-zinc-950/40 px-4 py-2 text-xs font-semibold text-gray-200 hover:border-white/20"
+                            disabled={bulkLoading}
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={applyBulkCustomField}
+                            disabled={bulkLoading}
+                            className={`rounded-full border px-4 py-2 text-xs font-semibold ${
+                              !bulkLoading
+                                ? 'border-amber-400/40 bg-amber-500/10 text-amber-200 hover:border-amber-300/60'
+                                : 'border-white/10 bg-zinc-950/40 text-gray-500'
+                            }`}
+                          >
+                            {bulkLoading ? 'Aplicando...' : 'Aplicar agora'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
 
                     {fixCandidates.length > 0 && (
                       <div className="mt-4 space-y-2">
@@ -2179,6 +2376,7 @@ export default function CampaignsNewRealPage() {
             focus={quickEditFocus}
             title={quickEditTitle}
             mode="focused"
+            showNameInFocusedMode={false}
           />
 
           <div className="rounded-2xl border border-white/10 bg-zinc-900/60 p-4 shadow-[0_12px_30px_rgba(0,0,0,0.35)]">

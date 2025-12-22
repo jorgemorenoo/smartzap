@@ -84,6 +84,9 @@ interface ContactQuickEditModalProps {
   title?: string;
   onSaved?: () => void;
   mode?: 'full' | 'focused';
+  // Quando true, o modo focused mostra também o campo Nome (útil para contexto/ajustes extras).
+  // Quando false, o modo focused mostra APENAS os campos necessários para destravar.
+  showNameInFocusedMode?: boolean;
 }
 
 export const ContactQuickEditModal: React.FC<ContactQuickEditModalProps> = ({
@@ -94,6 +97,7 @@ export const ContactQuickEditModal: React.FC<ContactQuickEditModalProps> = ({
   title = 'Editar contato',
   onSaved,
   mode = 'full',
+  showNameInFocusedMode = true,
 }) => {
   const queryClient = useQueryClient();
   const emailRef = useRef<HTMLInputElement | null>(null);
@@ -126,8 +130,10 @@ export const ContactQuickEditModal: React.FC<ContactQuickEditModalProps> = ({
   }, [focus]);
 
   // Quando em modo "focused" e temos um foco explícito,
-  // mostramos apenas o Nome + o campo que precisa de correção.
+  // por padrão mostramos Nome + o campo que precisa de correção.
+  // (pode ser desativado para um UX mais “cirúrgico”).
   const isFocusedMode = mode === 'focused' && focusTargets.length > 0;
+  const shouldShowName = !isFocusedMode || showNameInFocusedMode;
   const shouldShowEmail = !isFocusedMode || focusTargets.some((t) => t.type === 'email');
   const focusedCustomFieldKeys = useMemo(() => {
     const keys = focusTargets.filter((t) => t.type === 'custom_field').map((t) => (t as any).key as string);
@@ -304,15 +310,17 @@ export const ContactQuickEditModal: React.FC<ContactQuickEditModalProps> = ({
           </div>
         ) : (
           <div className="space-y-4">
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Nome</label>
-              <input
-                className="w-full bg-zinc-900 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-primary-500 outline-none transition-colors"
-                value={form.name}
-                onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))}
-                placeholder="Ex: João Silva"
-              />
-            </div>
+            {shouldShowName && (
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Nome</label>
+                <input
+                  className="w-full bg-zinc-900 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-primary-500 outline-none transition-colors"
+                  value={form.name}
+                  onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="Ex: João Silva"
+                />
+              </div>
+            )}
 
             {shouldShowEmail && (
               <div>

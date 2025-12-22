@@ -782,6 +782,54 @@ export const contactDb = {
         return contactDb.getById(id)
     },
 
+    // Aplica um campo customizado (merge) em vários contatos.
+    // Estratégia: lê custom_fields atuais em lote e faz upsert apenas da coluna custom_fields.
+    // Isso evita sobrescrever o objeto inteiro com apenas { key: value }.
+    bulkSetCustomField: async (
+        ids: string[],
+        key: string,
+        value: string
+    ): Promise<{ updated: number; notFound: string[] }> => {
+        const contactIds = Array.from(new Set((ids || []).map((v) => String(v || '').trim()).filter(Boolean)))
+        const k = String(key || '').trim()
+        const v = String(value ?? '').trim()
+        if (contactIds.length === 0) return { updated: 0, notFound: [] }
+        if (!k) return { updated: 0, notFound: contactIds }
+        if (!v) return { updated: 0, notFound: [] }
+
+        const { data, error } = await supabase
+            .from('contacts')
+            .select('id,custom_fields')
+            .in('id', contactIds)
+
+        if (error) throw error
+
+        const rows = (data || []).map((row: any) => {
+            const base = (row.custom_fields && typeof row.custom_fields === 'object') ? row.custom_fields : {}
+            const merged = { ...(base as any), [k]: v }
+            return {
+                id: row.id,
+                custom_fields: merged,
+                updated_at: new Date().toISOString(),
+            }
+        })
+
+        const foundIds = new Set((data || []).map((r: any) => String(r.id)))
+        const notFound = contactIds.filter((id) => !foundIds.has(id))
+
+        if (rows.length === 0) {
+            return { updated: 0, notFound }
+        }
+
+        const { error: upsertError } = await supabase
+            .from('contacts')
+            .upsert(rows as any, { onConflict: 'id' })
+
+        if (upsertError) throw upsertError
+
+        return { updated: rows.length, notFound }
+    },
+
     delete: async (id: string): Promise<void> => {
         const { error } = await supabase
             .from('contacts')

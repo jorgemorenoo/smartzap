@@ -45,6 +45,17 @@ export const DeleteContactsSchema = z.object({
   ids: z.array(z.string().min(1, 'ID inválido')).min(1, 'Selecione pelo menos um contato'),
 })
 
+// Bulk: aplica um campo personalizado (merge) em vários contatos.
+export const BulkSetContactCustomFieldSchema = z.object({
+  contactIds: z.array(z.string().min(1, 'ID inválido')).min(1, 'Selecione pelo menos um contato').max(5000, 'Máximo de 5.000 contatos por operação'),
+  key: z
+    .string()
+    .min(1, 'Key é obrigatória')
+    .max(60, 'Key muito longa')
+    .regex(/^[a-z][a-z0-9_]*$/, 'Key inválida (use a-z, 0-9 e _; comece com letra)'),
+  value: z.string().min(1, 'Valor é obrigatório').max(500, 'Valor muito longo'),
+})
+
 // ============================================================================
 // Campaign Schemas
 // ============================================================================
