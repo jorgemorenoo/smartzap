@@ -694,7 +694,8 @@ export const { POST } = serve<CampaignWorkflowInput>(
               const contentType = params.contentType || 'application/octet-stream'
               form.append('messaging_product', 'whatsapp')
               form.append('type', contentType)
-              form.append('file', new Blob([params.buffer], { type: contentType }), params.filename)
+              const bytes = new Uint8Array(params.buffer)
+              form.append('file', new Blob([bytes], { type: contentType }), params.filename)
 
               const res = await fetch(`https://graph.facebook.com/v24.0/${params.phoneNumberId}/media`, {
                 method: 'POST',
