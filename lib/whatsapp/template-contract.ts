@@ -656,7 +656,6 @@ export function buildMetaTemplatePayload(input: {
           ((entry.button.action as any)?.flow_id as string | undefined)
         const flowToken = params[0]?.text?.trim() || generateFlowToken(flowId)
         const action: Record<string, unknown> = { flow_token: flowToken }
-        if (flowId) action.flow_id = flowId
 
         const flowAction = (entry.button.action as any)?.flow_action
         const flowActionPayload = (entry.button.action as any)?.flow_action_payload

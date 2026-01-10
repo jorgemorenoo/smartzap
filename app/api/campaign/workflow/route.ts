@@ -2036,6 +2036,7 @@ export const { POST } = serve<CampaignWorkflowInput>(
               const base: any = {
                 campaign_id: campaignId,
                 contact_id: cid,
+                phone: op.contact.phone,
                 trace_id: traceId,
                 status: op.status,
                 sending_at: op.opts?.sendingAt || null,
