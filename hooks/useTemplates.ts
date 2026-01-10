@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { templateService, UtilityCategory, GeneratedTemplate, GenerateUtilityParams } from '../services/templateService';
@@ -50,6 +50,7 @@ export const useTemplatesController = () => {
     rejectedReason?: string | null;
   } | null>(null);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+  const [refreshingPreviewNames, setRefreshingPreviewNames] = useState<Set<string>>(new Set());
 
   // Delete confirmation state
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -249,6 +250,104 @@ export const useTemplatesController = () => {
       toast.error(error.message || 'Erro ao deletar templates');
     }
   });
+
+  const previewInFlightRef = useRef<Set<string>>(new Set())
+
+  const setPreviewRefreshing = (name: string, active: boolean) => {
+    setRefreshingPreviewNames((prev) => {
+      const next = new Set(prev)
+      if (active) next.add(name)
+      else next.delete(name)
+      return next
+    })
+  }
+
+  const updateTemplatePreviewCache = (
+    name: string,
+    url: string | null | undefined,
+    expiresAt: string | null | undefined
+  ) => {
+    if (!name || !url) return
+
+    queryClient.setQueryData(['templates'], (old: Template[] | undefined) => {
+      if (!Array.isArray(old)) return old
+      return old.map((t) =>
+        t.name === name
+          ? { ...t, headerMediaPreviewUrl: url, headerMediaPreviewExpiresAt: expiresAt ?? null }
+          : t
+      )
+    })
+
+    setSelectedTemplate((prev) => {
+      if (!prev || prev.name !== name) return prev
+      return { ...prev, headerMediaPreviewUrl: url, headerMediaPreviewExpiresAt: expiresAt ?? null }
+    })
+
+    setTemplateDetails((prev) => {
+      if (!prev) return prev
+      return { ...prev, headerMediaPreviewUrl: url, headerMediaPreviewExpiresAt: expiresAt ?? null }
+    })
+  }
+
+  const hasMediaHeader = (template: Template) => {
+    const header = template.components?.find((c) => c.type === 'HEADER')
+    const format = header?.format ? String(header.format).toUpperCase() : ''
+    return ['IMAGE', 'VIDEO', 'DOCUMENT', 'GIF'].includes(format)
+  }
+
+  const isPreviewExpired = (expiresAt?: string | null) => {
+    if (!expiresAt) return false
+    return new Date(expiresAt).getTime() <= Date.now()
+  }
+
+  const shouldFetchPreview = (template: Template) => {
+    if (!hasMediaHeader(template)) return false
+    if (!template.headerMediaPreviewUrl) return true
+    return isPreviewExpired(template.headerMediaPreviewExpiresAt)
+  }
+
+  const ensureTemplatePreview = async (
+    template: Template,
+    options?: { force?: boolean; silent?: boolean }
+  ) => {
+    if (!template?.name) return
+
+    const needsFetch = options?.force ? true : shouldFetchPreview(template)
+    if (!needsFetch) return
+
+    const inFlight = previewInFlightRef.current
+    if (inFlight.has(template.name)) return
+    inFlight.add(template.name)
+
+    if (options?.force) {
+      setPreviewRefreshing(template.name, true)
+    }
+
+    try {
+      const details = await templateService.getByName(template.name, {
+        refreshPreview: options?.force,
+      })
+      if (details?.headerMediaPreviewUrl) {
+        updateTemplatePreviewCache(
+          template.name,
+          details.headerMediaPreviewUrl,
+          details.headerMediaPreviewExpiresAt ?? null
+        )
+      }
+      if (options?.force && !options?.silent) {
+        toast.success('Preview atualizado.')
+      }
+    } catch (error) {
+      if (!options?.silent) {
+        toast.error(error instanceof Error ? error.message : 'Falha ao gerar preview')
+      }
+    } finally {
+      inFlight.delete(template.name)
+      if (options?.force) {
+        setPreviewRefreshing(template.name, false)
+      }
+    }
+  }
 
   // --- Manual draft actions (create / submit / delete) ---
   const [submittingManualDraftId, setSubmittingManualDraftId] = useState<string | null>(null)
@@ -524,6 +623,13 @@ export const useTemplatesController = () => {
 
     try {
       const details = await templateService.getByName(template.name);
+      if (details?.headerMediaPreviewUrl) {
+        updateTemplatePreviewCache(
+          template.name,
+          details.headerMediaPreviewUrl,
+          details.headerMediaPreviewExpiresAt ?? null
+        )
+      }
       setTemplateDetails({
         header: details.header,
         footer: details.footer,
@@ -716,6 +822,15 @@ export const useTemplatesController = () => {
     isLoadingDetails,
     onViewDetails: handleViewDetails,
     onCloseDetails: handleCloseDetails,
+    refreshingPreviewNames,
+    onPrefetchPreview: (template: Template) => {
+      if (!template) return
+      ensureTemplatePreview(template, { silent: true })
+    },
+    onRefreshPreview: (template: Template) => {
+      if (!template) return
+      ensureTemplatePreview(template, { force: true })
+    },
 
     // Delete Modal Props
     isDeleteModalOpen,

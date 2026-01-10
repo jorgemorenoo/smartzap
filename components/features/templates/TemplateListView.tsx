@@ -117,6 +117,9 @@ interface TemplateListViewProps {
   isLoadingDetails: boolean;
   onViewDetails: (template: Template) => void;
   onCloseDetails: () => void;
+  refreshingPreviewNames?: Set<string>;
+  onPrefetchPreview?: (template: Template) => void;
+  onRefreshPreview?: (template: Template) => void;
 
   // Delete Modal
   isDeleteModalOpen: boolean;
@@ -214,6 +217,9 @@ export const TemplateListView: React.FC<TemplateListViewProps> = ({
   isLoadingDetails,
   onViewDetails,
   onCloseDetails,
+  refreshingPreviewNames,
+  onPrefetchPreview,
+  onRefreshPreview,
   // Delete Modal props
   isDeleteModalOpen,
   templateToDelete,
@@ -239,8 +245,11 @@ export const TemplateListView: React.FC<TemplateListViewProps> = ({
   hideHeader = false,
 }) => {
 
-  const [hoveredTemplate, setHoveredTemplate] = React.useState<Template | null>(null);
+  const [hoveredTemplateId, setHoveredTemplateId] = React.useState<string | null>(null);
   const previewVariables = ['João', '19:00', '01/12', 'R$ 99,90', '#12345'];
+  const hoveredTemplate = hoveredTemplateId
+    ? templates.find((t) => t.id === hoveredTemplateId) || null
+    : null;
 
   const isManualDraft = (t: Template) => manualDraftIds?.has(t.id);
   const selectableMetaTemplates = templates.filter((t) => !isManualDraft(t));
@@ -540,8 +549,11 @@ export const TemplateListView: React.FC<TemplateListViewProps> = ({
                     return (
                   <tr
                     key={template.id}
-                    onMouseEnter={() => setHoveredTemplate(template)}
-                    onMouseLeave={() => setHoveredTemplate((current) => (current?.id === template.id ? null : current))}
+                    onMouseEnter={() => {
+                      setHoveredTemplateId(template.id)
+                      if (!manual) onPrefetchPreview?.(template)
+                    }}
+                    onMouseLeave={() => setHoveredTemplateId((current) => (current === template.id ? null : current))}
                     className={`hover:bg-white/5 transition-colors group cursor-pointer ${isRowSelected ? (manual ? 'bg-amber-500/5' : 'bg-emerald-500/5') : ''
                       }`}
                   >
@@ -711,6 +723,7 @@ export const TemplateListView: React.FC<TemplateListViewProps> = ({
             fallbackContent={hoveredTemplate.content}
             parameterFormat={hoveredTemplate.parameterFormat || 'positional'}
             variables={previewVariables}
+            headerMediaPreviewUrl={hoveredTemplate.headerMediaPreviewUrl || null}
             className="bg-zinc-950/80"
           />
         </div>
@@ -726,6 +739,12 @@ export const TemplateListView: React.FC<TemplateListViewProps> = ({
           .replace(/\{\{3\}\}/g, '01/12')
           .replace(/\{\{4\}\}/g, 'R$ 99,90')
           .replace(/\{\{5\}\}/g, '#12345');
+
+        const headerFormat = selectedTemplate.components?.find((c) => c.type === 'HEADER')?.format
+        const canRefreshPreview = Boolean(
+          headerFormat && ['IMAGE', 'VIDEO', 'DOCUMENT', 'GIF'].includes(String(headerFormat).toUpperCase())
+        )
+        const isRefreshingPreview = Boolean(refreshingPreviewNames?.has(selectedTemplate.name))
 
         // Só mostrar rejeição se for real (não "NONE")
         const hasRejection = templateDetails?.rejectedReason &&
@@ -818,6 +837,17 @@ export const TemplateListView: React.FC<TemplateListViewProps> = ({
                 >
                   <Trash2 size={18} />
                 </button>
+                {canRefreshPreview && onRefreshPreview && (
+                  <button
+                    onClick={() => onRefreshPreview(selectedTemplate)}
+                    disabled={isRefreshingPreview || isLoadingDetails}
+                    className="px-3 py-2 bg-zinc-950/40 text-gray-200 border border-white/10 rounded-lg font-medium hover:bg-white/5 transition-colors flex items-center gap-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                    title="Regerar preview da mídia"
+                  >
+                    {isRefreshingPreview ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+                    Regerar preview
+                  </button>
+                )}
                 <button
                   onClick={() => navigator.clipboard.writeText(selectedTemplate.content)}
                   className="flex-1 py-2 bg-zinc-950/40 text-gray-200 border border-white/10 rounded-lg font-medium hover:bg-white/5 transition-colors flex items-center justify-center gap-2 text-sm"

@@ -240,7 +240,10 @@ export const templateService = {
   },
 
   // Buscar detalhes de um template específico
-  getByName: async (name: string): Promise<Template & {
+  getByName: async (
+    name: string,
+    options?: { refreshPreview?: boolean }
+  ): Promise<Template & {
     header?: string | null;
     footer?: string | null;
     buttons?: Array<{ type: string; text: string; url?: string }>;
@@ -249,7 +252,8 @@ export const templateService = {
     qualityScore?: string | null;
     rejectedReason?: string | null;
   }> => {
-    const response = await fetch(`/api/templates/${encodeURIComponent(name)}`, {
+    const query = options?.refreshPreview ? '?refresh_preview=1' : '';
+    const response = await fetch(`/api/templates/${encodeURIComponent(name)}${query}`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' }
     });

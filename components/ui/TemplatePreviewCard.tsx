@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { ArrowUpRight, Phone } from 'lucide-react'
+import { ArrowUpRight, FileText, Image, Phone, Video } from 'lucide-react'
 import type { TemplateButton, TemplateComponent } from '@/types'
 import { replaceTemplatePlaceholders, type TemplateParameterFormat } from '@/lib/whatsapp/placeholder'
 import { cn } from '@/lib/utils'
@@ -313,6 +313,8 @@ export const TemplatePreviewCard: React.FC<TemplatePreviewCardProps> = ({
   const showHeaderMedia =
     Boolean(headerMediaPreviewUrl) &&
     Boolean(headerFormat && ['IMAGE', 'VIDEO', 'DOCUMENT', 'GIF'].includes(headerFormat))
+  const showHeaderPlaceholder =
+    !headerMediaPreviewUrl && Boolean(headerFormat && ['IMAGE', 'VIDEO', 'DOCUMENT', 'GIF'].includes(headerFormat))
   const bodyText = body?.text || fallbackContent || ''
   const footerText = footer?.text || ''
 
@@ -359,6 +361,21 @@ export const TemplatePreviewCard: React.FC<TemplatePreviewCardProps> = ({
               loading="lazy"
             />
           )}
+        </div>
+      ) : null}
+
+      {showHeaderPlaceholder ? (
+        <div className="mb-5 flex h-40 items-center justify-center rounded-xl border border-white/10 bg-white/5">
+          <div className="flex items-center gap-2 text-xs text-gray-400">
+            {headerFormat === 'DOCUMENT' ? (
+              <FileText size={18} />
+            ) : headerFormat === 'VIDEO' || headerFormat === 'GIF' ? (
+              <Video size={18} />
+            ) : (
+              <Image size={18} />
+            )}
+            <span>Carregando mídia…</span>
+          </div>
         </div>
       ) : null}
 

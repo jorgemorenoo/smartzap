@@ -2000,7 +2000,7 @@ export function ManualTemplateBuilder({
                           if (type === 'FLOW') {
                             const currentFlowId = String(b.flow_id || '')
                             const hasMatch = publishedFlows.some((f) => String(f.meta_flow_id || '') === currentFlowId)
-                            const selectValue = hasMatch ? currentFlowId : '__manual__'
+                            const selectValue = hasMatch ? currentFlowId : ''
 
                             return (
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
@@ -2010,7 +2010,7 @@ export function ManualTemplateBuilder({
                                     value={selectValue}
                                     onValueChange={(v) => {
                                       const next = [...buttons]
-                                      next[idx] = v === '__manual__' ? { ...b, flow_id: '' } : { ...b, flow_id: v }
+                                      next[idx] = { ...b, flow_id: v }
                                       updateButtons(next)
                                     }}
                                     disabled={flowsQuery.isLoading || publishedFlows.length === 0}
@@ -2025,7 +2025,6 @@ export function ManualTemplateBuilder({
                                       />
                                     </SelectTrigger>
                                     <SelectContent>
-                                      <SelectItem value="__manual__">Digitar / colar manualmente</SelectItem>
                                       {publishedFlows.map((f) => (
                                         <SelectItem key={f.id} value={String(f.meta_flow_id)}>
                                           <div className="flex items-center justify-between gap-2 w-full">
@@ -2051,19 +2050,13 @@ export function ManualTemplateBuilder({
                                     </SelectContent>
                                   </Select>
 
-                                  <div className="mt-3 text-xs font-medium text-gray-300">flow_id</div>
-                                  <Input
-                                    value={b.flow_id || ''}
-                                    onChange={(e) => {
-                                      const next = [...buttons]
-                                      next[idx] = { ...b, flow_id: e.target.value }
-                                      updateButtons(next)
-                                    }}
-                                    className="h-11 bg-zinc-950/40 border-white/10 text-white"
-                                    placeholder="Usar existente"
-                                  />
-                                  <div className="text-[11px] text-gray-500">
-                                    Dica: publique o Flow no Builder e selecione acima. Isso coloca o <span className="font-mono">meta_flow_id</span> aqui.
+                                  {!hasMatch && currentFlowId ? (
+                                    <div className="mt-3 text-[11px] text-amber-300">
+                                      O Flow atual não está publicado. Selecione um da lista.
+                                    </div>
+                                  ) : null}
+                                  <div className="mt-3 text-[11px] text-gray-500">
+                                    Dica: publique o Flow no Builder para aparecer na lista.
                                   </div>
                                 </div>
                                 <div className="space-y-1">
