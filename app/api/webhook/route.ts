@@ -767,9 +767,10 @@ export async function POST(request: NextRequest) {
               const responseJson = safeParseJson(nfm.response_json)
               const messageTimestamp = tryParseWebhookTimestampSeconds(message?.timestamp).iso
 
-              const flowId = (nfm?.flow_id || nfm?.flowId || null) as string | null
+              // IMPORTANTE: Meta WhatsApp retorna flow_token DENTRO do response_json, não no nfm diretamente
+              const flowId = (nfm?.flow_id || nfm?.flowId || (responseJson as any)?.flow_id || null) as string | null
               const flowName = (nfm?.name || null) as string | null
-              const flowToken = (nfm?.flow_token || nfm?.flowToken || null) as string | null
+              const flowToken = (nfm?.flow_token || nfm?.flowToken || (responseJson as any)?.flow_token || null) as string | null
               const campaignId = extractCampaignIdFromFlowToken(flowToken)
 
               // Best-effort: mapping para campos do SmartZap
