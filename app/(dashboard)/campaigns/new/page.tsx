@@ -234,28 +234,33 @@ export default function CampaignsNewRealPage() {
     return Object.fromEntries(fields.map((f) => [f.key, f.label])) as Record<string, string>
   }, [customFieldsQuery.data])
 
+  // Queries de audiência - só carregam a partir do Step 2 (Público)
   const tagsQuery = useQuery({
     queryKey: ['contact-tags'],
     queryFn: () => fetchJson<string[]>('/api/contacts/tags'),
     staleTime: 60_000,
+    enabled: step >= 2,
   })
 
   const statsQuery = useQuery({
     queryKey: ['contact-stats'],
     queryFn: () => fetchJson<ContactStats>('/api/contacts/stats'),
     staleTime: 30_000,
+    enabled: step >= 2,
   })
 
   const countriesQuery = useQuery({
     queryKey: ['contact-country-codes'],
     queryFn: () => fetchJson<{ data: CountryCount[] }>('/api/contacts/country-codes'),
     staleTime: 60_000,
+    enabled: step >= 2,
   })
 
   const statesQuery = useQuery({
     queryKey: ['contact-state-codes'],
     queryFn: () => fetchJson<{ data: StateCount[] }>('/api/contacts/state-codes'),
     staleTime: 60_000,
+    enabled: step >= 2,
   })
 
   const testContactQuery = useQuery({
@@ -399,6 +404,7 @@ export default function CampaignsNewRealPage() {
     return () => controller.abort()
   }, [testContactQuery.data?.phone])
 
+  // Busca contagens de contatos por tag - só roda quando tagsQuery tem dados (step >= 2)
   useEffect(() => {
     const tags = (tagsQuery.data || []).slice(0, 6)
     if (!tags.length) return
