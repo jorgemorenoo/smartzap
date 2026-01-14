@@ -17,6 +17,37 @@ import {
 import { MetaGraphApiError } from '@/lib/meta-flows-api'
 import { generateFlowJsonFromFormSpec, normalizeFlowFormSpec, validateFlowFormSpec } from '@/lib/flow-form'
 import { validateMetaFlowJson } from '@/lib/meta-flow-json-validator'
+import { settingsDb } from '@/lib/supabase-db'
+
+/**
+ * Detecta se o Flow JSON e dinamico (usa data_exchange)
+ */
+function isDynamicFlow(flowJson: unknown): boolean {
+  if (!flowJson || typeof flowJson !== 'object') return false
+  const json = flowJson as Record<string, unknown>
+  // Flow JSON 3.0+ com data_api_version indica flow dinamico
+  return json.data_api_version === '3.0'
+}
+
+/**
+ * Retorna a URL do endpoint se configurado
+ */
+async function getFlowEndpointUrl(): Promise<string | null> {
+  const privateKey = await settingsDb.get('whatsapp_flow_private_key')
+  if (!privateKey) return null
+
+  // Monta a URL do endpoint
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}/api/flows/endpoint`
+  }
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}/api/flows/endpoint`
+  }
+  if (process.env.NEXT_PUBLIC_APP_URL) {
+    return `${process.env.NEXT_PUBLIC_APP_URL}/api/flows/endpoint`
+  }
+  return null
+}
 
 const PublishSchema = z
   .object({
@@ -128,6 +159,23 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     let previewUrl: string | null = null
 
     if (!metaFlowId) {
+      // Verifica se e um flow dinamico e precisa de endpoint
+      const dynamic = isDynamicFlow(flowJson)
+      let endpointUri: string | undefined
+
+      if (dynamic) {
+        const url = await getFlowEndpointUrl()
+        if (!url) {
+          return NextResponse.json(
+            {
+              error: 'Flow dinamico requer endpoint configurado. Va em Configuracoes > MiniApp Dinamico e gere as chaves.',
+            },
+            { status: 400 }
+          )
+        }
+        endpointUri = url
+      }
+
       // Criar na Meta (com publish opcional em um único request)
       const created = await metaCreateFlow({
         accessToken: credentials.accessToken,
@@ -136,6 +184,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         categories: input.categories.length > 0 ? input.categories : ['OTHER'],
         flowJson,
         publish: !!input.publish,
+        endpointUri,
       })
 
       metaFlowId = created.id

@@ -111,13 +111,19 @@ export async function metaCreateFlow(params: {
   categories: string[]
   flowJson: unknown
   publish: boolean
+  endpointUri?: string
 }): Promise<MetaFlowsCreateResult> {
   const normalizedFlowJson = normalizeFlowJson(params.flowJson)
-  const body = {
+  const body: Record<string, unknown> = {
     name: params.name,
     categories: params.categories,
     flow_json: JSON.stringify(normalizedFlowJson),
     publish: params.publish,
+  }
+
+  // Para Flows dinamicos, passar o endpoint
+  if (params.endpointUri) {
+    body.endpoint_uri = params.endpointUri
   }
 
   const res = await fetch(`${GRAPH_BASE}/${encodeURIComponent(params.wabaId)}/flows`, {
