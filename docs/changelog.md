@@ -94,6 +94,7 @@
 - **🗓️ CalendarPicker no Flow de agendamento**
   - `scripts/test-booking-flow.mjs` troca dropdown por `CalendarPicker` (calendário visual)
   - Flow JSON atualizado para `7.3` (recomendado pela Meta) e campos `min/max/include-days`
+  - Datas não trabalhadas agora aparecem desabilitadas via `unavailable-dates`
 
 - **✅ Confirmação automática pós‑Flow**
   - `app/api/webhook/route.ts` envia mensagem de confirmação quando recebe `nfm_reply` do Flow

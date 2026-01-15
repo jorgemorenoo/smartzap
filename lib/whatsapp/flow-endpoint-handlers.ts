@@ -143,11 +143,24 @@ async function getCalendarPickerData(): Promise<CalendarPickerData> {
     .filter((d) => d.enabled)
     .map((d) => WEEKDAY_LABELS[d.day])
 
+  const unavailableDates: string[] = []
+  for (let dayOffset = 0; dayOffset <= maxAdvanceDays; dayOffset += 1) {
+    const utcDate = new Date(Date.UTC(year, month - 1, day + dayOffset, 12, 0, 0))
+    const dateStr = utcDate.toISOString().split('T')[0]
+    const jsDay = utcDate.getUTCDay()
+    const isoDay = jsDay === 0 ? 7 : jsDay
+    const dayKey = WEEKDAY_KEYS[isoDay - 1]
+    const workingDay = config.workingHours.find((d) => d.day === dayKey)
+    if (!workingDay?.enabled) {
+      unavailableDates.push(dateStr)
+    }
+  }
+
   return {
     minDate: todayStr,
     maxDate: maxDateStr,
     includeDays,
-    unavailableDates: [],
+    unavailableDates,
   }
 }
 
