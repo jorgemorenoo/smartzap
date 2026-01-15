@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
     }
 
     const flowRequest = decrypted.decryptedBody as unknown as FlowDataExchangeRequest
-    console.log('[flow-endpoint] 🔓 Decrypted - Action:', flowRequest.action, 'Screen:', flowRequest.screen)
+    console.log('[flow-endpoint] 🔓 Decrypted - Action:', flowRequest.action, 'Screen:', flowRequest.screen, 'Data:', JSON.stringify(flowRequest.data || {}))
 
     // Health check - DEVE ser criptografado como todas as outras respostas
     // Ref: https://developers.facebook.com/docs/whatsapp/flows/guides/implementingyourflowendpoint#health_check_request
@@ -80,8 +80,9 @@ export async function POST(request: NextRequest) {
     let response
     try {
       response = await handleFlowAction(flowRequest)
+      console.log('[flow-endpoint] ✅ Handler response:', JSON.stringify(response).substring(0, 500))
     } catch (error) {
-      console.error('[flow-endpoint] Erro no handler:', error)
+      console.error('[flow-endpoint] ❌ Erro no handler:', error)
       response = createErrorResponse(
         error instanceof Error ? error.message : 'Erro interno'
       )
