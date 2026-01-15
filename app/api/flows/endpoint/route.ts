@@ -28,27 +28,19 @@ const PRIVATE_KEY_SETTING = 'whatsapp_flow_private_key'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/1294d6ce-76f2-430d-96ab-3ae4d7527327',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'endpoint-health',hypothesisId:'H1',location:'app/api/flows/endpoint/route.ts:31',message:'endpoint POST received',data:{hasEncryptedFlowData:Boolean(body?.encrypted_flow_data),hasEncryptedAesKey:Boolean(body?.encrypted_aes_key),hasInitialVector:Boolean(body?.initial_vector)},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion agent log
+    console.log('[flow-endpoint] 📥 POST received at', new Date().toISOString())
 
     // Valida campos obrigatorios
     const { encrypted_flow_data, encrypted_aes_key, initial_vector } = body
     if (!encrypted_flow_data || !encrypted_aes_key || !initial_vector) {
-      console.error('[flow-endpoint] Campos obrigatorios ausentes')
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/1294d6ce-76f2-430d-96ab-3ae4d7527327',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'endpoint-health',hypothesisId:'H1',location:'app/api/flows/endpoint/route.ts:37',message:'missing encrypted fields',data:{hasEncryptedFlowData:Boolean(encrypted_flow_data),hasEncryptedAesKey:Boolean(encrypted_aes_key),hasInitialVector:Boolean(initial_vector)},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion agent log
+      console.error('[flow-endpoint] ❌ Campos obrigatorios ausentes')
       return NextResponse.json({ error: 'Campos obrigatorios ausentes' }, { status: 400 })
     }
 
     // Busca a chave privada
     const privateKey = await settingsDb.get(PRIVATE_KEY_SETTING)
     if (!privateKey) {
-      console.error('[flow-endpoint] Chave privada nao configurada')
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/1294d6ce-76f2-430d-96ab-3ae4d7527327',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'endpoint-health',hypothesisId:'H2',location:'app/api/flows/endpoint/route.ts:44',message:'missing private key',data:{hasPrivateKey:false},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion agent log
+      console.error('[flow-endpoint] ❌ Chave privada nao configurada')
       return NextResponse.json({ error: 'Endpoint nao configurado' }, { status: 500 })
     }
 
@@ -60,35 +52,24 @@ export async function POST(request: NextRequest) {
         privateKey
       )
     } catch (error) {
-      console.error('[flow-endpoint] Erro ao descriptografar:', error)
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/1294d6ce-76f2-430d-96ab-3ae4d7527327',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'endpoint-health',hypothesisId:'H3',location:'app/api/flows/endpoint/route.ts:57',message:'decrypt failed',data:{errorName:error instanceof Error ? error.name : 'unknown',errorMessage:error instanceof Error ? error.message : 'unknown'},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion agent log
+      console.error('[flow-endpoint] ❌ Erro ao descriptografar:', error)
       return NextResponse.json({ error: 'Falha na descriptografia' }, { status: 421 })
     }
 
     const flowRequest = decrypted.decryptedBody as unknown as FlowDataExchangeRequest
-    console.log('[flow-endpoint] Action:', flowRequest.action, 'Screen:', flowRequest.screen)
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/1294d6ce-76f2-430d-96ab-3ae4d7527327',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'endpoint-health',hypothesisId:'H4',location:'app/api/flows/endpoint/route.ts:62',message:'decrypted request',data:{action:flowRequest.action ?? null,screen:flowRequest.screen ?? null,hasData:Boolean(flowRequest.data)},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion agent log
+    console.log('[flow-endpoint] 🔓 Decrypted - Action:', flowRequest.action, 'Screen:', flowRequest.screen)
 
     // Health check - DEVE ser criptografado como todas as outras respostas
     // Ref: https://developers.facebook.com/docs/whatsapp/flows/guides/implementingyourflowendpoint#health_check_request
     if (flowRequest.action === 'ping') {
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/1294d6ce-76f2-430d-96ab-3ae4d7527327',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'flow-monitor',hypothesisId:'H1',location:'app/api/flows/endpoint/route.ts:ping',message:'PING received - encrypting response',data:{action:'ping'},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion agent log
-      console.log('[flow-endpoint] Ping received, responding with encrypted status')
+      console.log('[flow-endpoint] 🏓 PING received at', new Date().toISOString())
       const pingResponse = { data: { status: 'active' } }
       const encryptedPingResponse = encryptResponse(
         pingResponse,
         decrypted.aesKeyBuffer,
         decrypted.initialVectorBuffer
       )
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/1294d6ce-76f2-430d-96ab-3ae4d7527327',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'flow-monitor',hypothesisId:'H2',location:'app/api/flows/endpoint/route.ts:ping-response',message:'PING response encrypted',data:{responseLength:encryptedPingResponse.length,isBase64:encryptedPingResponse.length > 0 && !encryptedPingResponse.startsWith('{')},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion agent log
+      console.log('[flow-endpoint] 🔐 PING response encrypted, length:', encryptedPingResponse.length, 'isBase64:', !encryptedPingResponse.startsWith('{'))
       return new NextResponse(encryptedPingResponse, {
         status: 200,
         headers: { 'Content-Type': 'text/plain' },
@@ -112,9 +93,7 @@ export async function POST(request: NextRequest) {
       decrypted.aesKeyBuffer,
       decrypted.initialVectorBuffer
     )
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/1294d6ce-76f2-430d-96ab-3ae4d7527327',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'endpoint-health',hypothesisId:'H4',location:'app/api/flows/endpoint/route.ts:86',message:'encrypted response ready',data:{length:typeof encryptedResponse === 'string' ? encryptedResponse.length : null},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion agent log
+    console.log('[flow-endpoint] 🔐 Response encrypted, length:', encryptedResponse.length)
 
     return new NextResponse(encryptedResponse, {
       status: 200,
