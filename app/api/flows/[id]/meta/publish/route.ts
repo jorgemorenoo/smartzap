@@ -299,6 +299,17 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
             : null
           debugInfo.publicKeySignatureStatusAfter = refreshedKey.signatureStatus ?? null
           debugInfo.publicKeyMatchesMetaAfter = normalizedRefreshed === normalizedLocalKey
+
+          if (!debugInfo.publicKeyMatchesMetaAfter) {
+            return NextResponse.json(
+              {
+                error:
+                  'Chave pública não ficou registrada na Meta. Verifique o Phone Number ID e as permissões do token (whatsapp_business_messaging) para este número.',
+                debug: wantsDebug ? debugInfo : undefined,
+              },
+              { status: 400 }
+            )
+          }
         }
       }
 

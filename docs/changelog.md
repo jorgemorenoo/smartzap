@@ -65,6 +65,9 @@
 - **🔍 Debug avançado de chave pública**
   - `app/api/flows/[id]/meta/publish/route.ts` agora expõe hash da chave local/meta e status de assinatura
 
+- **🧯 Bloqueio quando chave não registra**
+  - `app/api/flows/[id]/meta/publish/route.ts` interrompe o publish se a chave não persistir na Meta
+
 ## 25/12/2025 - Debug (Run/Trace para campanhas)
 
 - **🔎 Timeline estruturada por `trace_id` (sem caçar logs)**
