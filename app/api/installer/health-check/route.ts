@@ -1,35 +1,9 @@
 import { z } from 'zod';
-import dns from 'dns';
 import { Client } from 'pg';
 import {
   extractProjectRefFromSupabaseUrl,
   resolveSupabaseDbUrl,
 } from '@/lib/installer/supabase';
-
-/**
- * Resolve hostname para IPv4 para evitar problemas em ambientes que não suportam IPv6.
- */
-async function resolveToIPv4(hostname: string): Promise<string> {
-  return new Promise((resolve) => {
-    dns.lookup(hostname, { family: 4 }, (err, address) => {
-      if (err || !address) {
-        resolve(hostname);
-      } else {
-        resolve(address);
-      }
-    });
-  });
-}
-
-function replaceHostInUrl(urlString: string, newHost: string): string {
-  try {
-    const url = new URL(urlString);
-    url.hostname = newHost;
-    return url.toString();
-  } catch {
-    return urlString;
-  }
-}
 
 export const maxDuration = 60;
 export const runtime = 'nodejs';
@@ -79,23 +53,10 @@ async function checkDatabaseHealth(dbUrl: string): Promise<{
 }> {
   const normalizedDbUrl = stripSslModeParam(dbUrl);
 
-  // Resolve hostname para IPv4 para evitar problemas com IPv6
-  let finalDbUrl = normalizedDbUrl;
-  try {
-    const urlObj = new URL(normalizedDbUrl);
-    const ipv4Address = await resolveToIPv4(urlObj.hostname);
-    if (ipv4Address !== urlObj.hostname) {
-      finalDbUrl = replaceHostInUrl(normalizedDbUrl, ipv4Address);
-      console.log(`[health-check] Usando IPv4: ${ipv4Address}`);
-    }
-  } catch {
-    // Usa URL original se falhar
-  }
-
+  // NÃO resolver para IPv4 - o SSL precisa do hostname original para SNI
   const client = new Client({
-    connectionString: finalDbUrl,
+    connectionString: normalizedDbUrl,
     ssl: needsSsl(dbUrl) ? { rejectUnauthorized: false } : undefined,
-    connectionTimeoutMillis: 10_000,
   });
 
   try {
