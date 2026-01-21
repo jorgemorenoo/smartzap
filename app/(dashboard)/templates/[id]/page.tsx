@@ -6,7 +6,7 @@ import { useTemplateProjectDetailsQuery } from '@/hooks/useTemplateProjects';
 import {
     Loader2, ArrowLeft, Check, AlertCircle, Clock, Send, Trash2,
     RefreshCw, Filter, ChevronDown, CheckCircle, XCircle, AlertTriangle,
-    Copy, CheckSquare, Square, Eye
+    Copy, CheckSquare, Square, Eye, Pencil, X
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -23,8 +23,47 @@ export default function TemplateProjectDetailsPage() {
     const [selectedItems, setSelectedItems] = useState<string[]>([]);
     const [expandedSection, setExpandedSection] = useState<'APPROVED' | 'REJECTED' | 'PENDING' | 'DRAFT' | 'ALL'>('ALL');
     const [previewItem, setPreviewItem] = useState<any | null>(null);
+    const [isEditingTitle, setIsEditingTitle] = useState(false);
+    const [editedTitle, setEditedTitle] = useState('');
 
     const { data: project, isLoading, error, refetch } = useTemplateProjectDetailsQuery(id);
+
+    // Rename Project Mutation
+    const renameProjectMutation = useMutation({
+        mutationFn: async (newTitle: string) => {
+            const response = await fetch(`/api/template-projects/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: newTitle })
+            });
+            if (!response.ok) throw new Error('Falha ao renomear');
+            return response.json();
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['template_projects', id] });
+            queryClient.invalidateQueries({ queryKey: ['template_projects'] });
+            toast.success('Projeto renomeado!');
+            setIsEditingTitle(false);
+        },
+        onError: () => {
+            toast.error('Erro ao renomear projeto');
+        }
+    });
+
+    const handleStartEdit = () => {
+        setEditedTitle(project?.title || '');
+        setIsEditingTitle(true);
+    };
+
+    const handleSaveTitle = () => {
+        if (!editedTitle.trim()) return toast.error('Digite um nome');
+        renameProjectMutation.mutate(editedTitle.trim());
+    };
+
+    const handleCancelEdit = () => {
+        setIsEditingTitle(false);
+        setEditedTitle('');
+    };
 
     // DEBUG: Inspect loaded items
     React.useEffect(() => {
@@ -198,7 +237,47 @@ export default function TemplateProjectDetailsPage() {
 
                         <div className="min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                                <PageTitle className="text-2xl sm:text-3xl truncate">{project.title}</PageTitle>
+                                {isEditingTitle ? (
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="text"
+                                            value={editedTitle}
+                                            onChange={(e) => setEditedTitle(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') handleSaveTitle();
+                                                if (e.key === 'Escape') handleCancelEdit();
+                                            }}
+                                            autoFocus
+                                            className="text-2xl sm:text-3xl font-bold bg-transparent border-b-2 border-emerald-500 outline-none text-white min-w-[200px]"
+                                        />
+                                        <button
+                                            onClick={handleSaveTitle}
+                                            disabled={renameProjectMutation.isPending}
+                                            className="p-1.5 text-emerald-400 hover:bg-emerald-500/20 rounded-lg transition-colors"
+                                            title="Salvar"
+                                        >
+                                            {renameProjectMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Check className="w-5 h-5" />}
+                                        </button>
+                                        <button
+                                            onClick={handleCancelEdit}
+                                            className="p-1.5 text-gray-400 hover:bg-white/10 rounded-lg transition-colors"
+                                            title="Cancelar"
+                                        >
+                                            <X className="w-5 h-5" />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <PageTitle className="text-2xl sm:text-3xl truncate">{project.title}</PageTitle>
+                                        <button
+                                            onClick={handleStartEdit}
+                                            className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                                            title="Renomear projeto"
+                                        >
+                                            <Pencil className="w-4 h-4" />
+                                        </button>
+                                    </>
+                                )}
                                 <span className="px-2 py-0.5 text-xs rounded-full border bg-zinc-950/40 border-white/10 text-gray-400 shrink-0">
                                     {groups.DRAFT.length === 0 && groups.PENDING.length === 0 ? 'Concluído' : 'Em Progresso'}
                                 </span>
@@ -311,6 +390,30 @@ export default function TemplateProjectDetailsPage() {
 
                                 {isExpanded && (
                                     <div className="px-4 pb-4 space-y-2">
+                                        {/* Checkbox "Selecionar Tudo" para seção DRAFT */}
+                                        {section.id === 'DRAFT' && sectionItems.length > 0 && (
+                                            <div
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    toggleSelectAll();
+                                                }}
+                                                className="flex items-center gap-3 px-3 py-2 rounded-lg bg-zinc-950/60 border border-white/5 cursor-pointer hover:bg-white/5 transition-colors"
+                                            >
+                                                <div className={cn(
+                                                    "w-5 h-5 rounded border flex items-center justify-center transition-colors shrink-0",
+                                                    selectedItems.length === groups.DRAFT.length && groups.DRAFT.length > 0
+                                                        ? "bg-emerald-500 border-emerald-500 text-black"
+                                                        : "border-white/20 text-transparent hover:border-white/40"
+                                                )}>
+                                                    <Check className="w-3.5 h-3.5" />
+                                                </div>
+                                                <span className="text-sm text-gray-400">
+                                                    {selectedItems.length === groups.DRAFT.length && groups.DRAFT.length > 0
+                                                        ? 'Desmarcar tudo'
+                                                        : `Selecionar tudo (${groups.DRAFT.length})`}
+                                                </span>
+                                            </div>
+                                        )}
                                         {/* @ts-ignore */}
                                         {sectionItems.map((item: any) => {
                                             const isSelected = selectedItems.includes(item.id);

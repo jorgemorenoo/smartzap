@@ -168,7 +168,10 @@ import {
     Loader2,
     Check,
     Save,
-    AlertCircle
+    AlertCircle,
+    CheckSquare,
+    Square,
+    Pencil
 } from 'lucide-react';
 import { GeneratedTemplate } from '@/lib/ai/services/template-agent';
 import { templateService } from '@/lib/whatsapp/template.service';
@@ -191,6 +194,7 @@ export default function NewTemplateProjectPage() {
     // Results State
     const [generatedTemplates, setGeneratedTemplates] = useState<GeneratedTemplate[]>([]);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [projectTitle, setProjectTitle] = useState('');
 
     // Preview State - hover mostra variáveis preenchidas
     const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -260,6 +264,14 @@ export default function NewTemplateProjectPage() {
             const valid = templates.filter(t => !t.judgment || t.judgment.approved || t.wasFixed);
             setSelectedIds(new Set(valid.map(t => t.id)));
 
+            // Gera título padrão baseado no prompt APENAS se usuário não definiu
+            if (!projectTitle.trim()) {
+                const defaultTitle = prompt.length > 40
+                    ? prompt.substring(0, 40) + '...'
+                    : prompt;
+                setProjectTitle(defaultTitle);
+            }
+
             setStep('review');
         } catch (error) {
             console.error(error);
@@ -271,12 +283,13 @@ export default function NewTemplateProjectPage() {
     // Save Project Handler
     const handleSaveProject = async () => {
         if (selectedIds.size === 0) return toast.error('Selecione pelo menos um template');
+        if (!projectTitle.trim()) return toast.error('Digite um nome para o projeto');
 
         try {
             const selected = generatedTemplates.filter(t => selectedIds.has(t.id));
 
             await createProject({
-                title: prompt.substring(0, 50) + (prompt.length > 50 ? '...' : ''),
+                title: projectTitle.trim(),
                 prompt: prompt,
                 status: 'draft',
                 items: selected.map(t => ({
@@ -304,6 +317,16 @@ export default function NewTemplateProjectPage() {
         setSelectedIds(newSet);
     };
 
+    const toggleSelectAll = () => {
+        if (selectedIds.size === generatedTemplates.length) {
+            setSelectedIds(new Set());
+        } else {
+            setSelectedIds(new Set(generatedTemplates.map(t => t.id)));
+        }
+    };
+
+    const isAllSelected = selectedIds.size === generatedTemplates.length && generatedTemplates.length > 0;
+
     return (
         <Page>
             <PageHeader>
@@ -314,7 +337,16 @@ export default function NewTemplateProjectPage() {
                     >
                         <ArrowLeft className="w-5 h-5" />
                     </button>
-                    <PageTitle className="text-[var(--ds-text-primary)]">Novo Projeto de Templates</PageTitle>
+                    <div className="flex items-center gap-2 group">
+                        <input
+                            type="text"
+                            value={projectTitle}
+                            onChange={(e) => setProjectTitle(e.target.value)}
+                            placeholder="Nome do Projeto..."
+                            className="text-2xl font-bold bg-transparent border-none outline-none text-[var(--ds-text-primary)] placeholder:text-[var(--ds-text-muted)] min-w-[200px] focus:ring-0"
+                        />
+                        <Pencil className="w-4 h-4 text-[var(--ds-text-muted)] opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
                     {strategy && (
                         <Badge variant="outline" className="ml-2 gap-2 py-1 px-3 border-[var(--ds-border-default)] text-[var(--ds-text-secondary)]">
                             {strategy === 'marketing' && <Megaphone className="w-3 h-3" />}
@@ -487,8 +519,15 @@ export default function NewTemplateProjectPage() {
                 <div className="space-y-6">
                     <div className="flex items-center justify-between">
                         <h2 className="text-xl font-semibold text-[var(--ds-text-primary)]">Revise os Templates Gerados</h2>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-3">
                             <span className="text-sm text-[var(--ds-text-muted)]">{selectedIds.size} selecionados</span>
+                            <button
+                                onClick={toggleSelectAll}
+                                className="px-3 py-2 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] text-[var(--ds-text-secondary)] rounded-lg hover:bg-[var(--ds-bg-hover)] transition-colors flex items-center gap-2 text-sm"
+                            >
+                                {isAllSelected ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
+                                {isAllSelected ? 'Desmarcar Tudo' : 'Selecionar Tudo'}
+                            </button>
                             <button
                                 onClick={handleSaveProject}
                                 disabled={isCreating || selectedIds.size === 0}

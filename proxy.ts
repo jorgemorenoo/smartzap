@@ -16,8 +16,8 @@ export const config = {
 }
 
 // Routes that don't require user authentication
-const PUBLIC_PAGES = ['/login', '/install', '/debug-auth', '/f', '/tg']
-const PUBLIC_API_ROUTES = ['/api/auth', '/api/webhook', '/api/health', '/api/system', '/api/installer', '/api/debug', '/api/database', '/api/campaign/workflow', '/api/account/alerts', '/api/public/lead-forms', '/api/builder', '/api/telegram']
+const PUBLIC_PAGES = ['/login', '/install', '/debug-auth', '/f', '/tg', '/atendimento']
+const PUBLIC_API_ROUTES = ['/api/auth', '/api/webhook', '/api/health', '/api/system', '/api/installer', '/api/debug', '/api/database', '/api/campaign/workflow', '/api/account/alerts', '/api/public/lead-forms', '/api/builder', '/api/telegram', '/api/attendants', '/api/push', '/api/inbox']
 
 export async function proxy(request: NextRequest) {
     const pathname = request.nextUrl.pathname

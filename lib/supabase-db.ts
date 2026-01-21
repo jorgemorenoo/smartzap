@@ -1876,6 +1876,21 @@ export const templateProjectDb = {
             .eq('id', id);
 
         if (error) throw error;
+    },
+
+    update: async (id: string, updates: Partial<{ title: string; status: string }>): Promise<TemplateProject> => {
+        const { data, error } = await supabase
+            .from('template_projects')
+            .update({
+                ...updates,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data as TemplateProject;
     }
 };
 

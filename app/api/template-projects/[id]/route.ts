@@ -36,3 +36,25 @@ export async function DELETE(
         )
     }
 }
+
+export async function PATCH(
+    request: Request,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    try {
+        const { id } = await params
+        const body = await request.json()
+
+        const updated = await templateProjectDb.update(id, {
+            title: body.title
+        })
+
+        return NextResponse.json(updated)
+    } catch (error) {
+        console.error('Failed to update template project:', error)
+        return NextResponse.json(
+            { error: 'Failed to update template project' },
+            { status: 500 }
+        )
+    }
+}

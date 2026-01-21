@@ -434,15 +434,18 @@ export async function processChatAgent(
       }
     }
 
-    console.log(`[chat-agent] Generating response with tools: ${Object.keys(tools).join(', ')}`)
+    // Determina se precisa de multi-step (mais de uma tool além de respond)
+    const hasMultipleTools = Object.keys(tools).length > 1
+    console.log(`[chat-agent] Generating response with tools: ${Object.keys(tools).join(', ')}, multiStep: ${hasMultipleTools}`)
 
-    // Generate with multi-step support (LLM can search, then respond)
+    // Generate with multi-step support when we have multiple tools
+    // stopWhen prevents infinite loops when LLM has choices (search, booking, etc.)
     await generateText({
       model,
       system: systemPrompt,
       messages: aiMessages,
       tools,
-      ...(searchKnowledgeBaseTool ? { stopWhen: stepCountIs(3) } : {}), // Allow: search → think → respond
+      ...(hasMultipleTools ? { stopWhen: stepCountIs(3) } : {}), // Allow: tool → think → respond
       temperature: agent.temperature ?? DEFAULT_TEMPERATURE,
       maxOutputTokens: agent.max_tokens ?? DEFAULT_MAX_TOKENS,
     })
