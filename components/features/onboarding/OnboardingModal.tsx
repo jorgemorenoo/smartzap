@@ -26,16 +26,19 @@ import { OnboardingCompleteStep } from './steps/OnboardingCompleteStep';
 
 interface OnboardingModalProps {
   isConnected: boolean;
-  onComplete: (credentials: {
+  /** Chamado para salvar credenciais (NÃO marca onboarding como completo) */
+  onSaveCredentials: (credentials: {
     phoneNumberId: string;
     businessAccountId: string;
     accessToken: string;
   }) => Promise<void>;
+  /** Chamado quando o usuário finaliza TODO o fluxo de onboarding */
+  onMarkComplete: () => Promise<void>;
   /** Força exibição do modal em um step específico (ex: 'configure-webhook') */
   forceStep?: OnboardingStep;
 }
 
-export function OnboardingModal({ isConnected, onComplete, forceStep }: OnboardingModalProps) {
+export function OnboardingModal({ isConnected, onSaveCredentials, onMarkComplete, forceStep }: OnboardingModalProps) {
   const {
     progress,
     isLoaded,
@@ -94,8 +97,10 @@ export function OnboardingModal({ isConnected, onComplete, forceStep }: Onboardi
     accessToken: '',
   });
 
-  const handleComplete = async () => {
-    await onComplete(credentials);
+  // Usado pelo caminho direto (direct-credentials) - salva e marca como completo
+  const handleDirectComplete = async () => {
+    await onSaveCredentials(credentials);
+    await onMarkComplete();
     completeOnboarding();
   };
 
@@ -156,7 +161,8 @@ export function OnboardingModal({ isConnected, onComplete, forceStep }: Onboardi
             credentials={credentials}
             onComplete={async () => {
               // Salva as credenciais e avança para o próximo step (webhook)
-              await onComplete(credentials);
+              // NÃO marca como completo ainda - o usuário precisa configurar o webhook
+              await onSaveCredentials(credentials);
               nextStep();
             }}
             onBack={previousStep}
@@ -208,11 +214,17 @@ export function OnboardingModal({ isConnected, onComplete, forceStep }: Onboardi
               // Atualiza o token nas credenciais locais
               setCredentials(prev => ({ ...prev, accessToken: newToken }));
               // Salva no backend (health check será atualizado automaticamente)
-              await onComplete({ ...credentials, accessToken: newToken });
+              await onSaveCredentials({ ...credentials, accessToken: newToken });
             }}
-            onNext={completeOnboarding}
+            onNext={async () => {
+              await onMarkComplete();
+              completeOnboarding();
+            }}
             onBack={previousStep}
-            onSkip={completeOnboarding}
+            onSkip={async () => {
+              await onMarkComplete();
+              completeOnboarding();
+            }}
             stepNumber={currentStepNumber}
             totalSteps={totalSteps}
           />
@@ -223,7 +235,7 @@ export function OnboardingModal({ isConnected, onComplete, forceStep }: Onboardi
           <DirectCredentialsStep
             credentials={credentials}
             onCredentialsChange={setCredentials}
-            onComplete={handleComplete}
+            onComplete={handleDirectComplete}
             onBack={previousStep}
           />
         );
@@ -231,7 +243,10 @@ export function OnboardingModal({ isConnected, onComplete, forceStep }: Onboardi
       case 'complete':
         return (
           <OnboardingCompleteStep
-            onComplete={completeOnboarding}
+            onComplete={async () => {
+              await onMarkComplete();
+              completeOnboarding();
+            }}
           />
         );
 

@@ -598,8 +598,8 @@ export function DashboardShell({
     // Determina se precisa configurar webhook (WhatsApp conectado mas webhook não)
     const needsWebhookSetup = isWhatsAppConnected && !isWebhookConfigured && healthStatus !== undefined
 
-    // Handler para quando o onboarding for completado
-    const handleOnboardingComplete = useCallback(async (credentials: {
+    // Handler para salvar credenciais (NÃO marca como completo - o usuário ainda precisa configurar webhook)
+    const handleSaveCredentials = useCallback(async (credentials: {
         phoneNumberId: string
         businessAccountId: string
         accessToken: string
@@ -615,6 +615,13 @@ export function DashboardShell({
             testContact: undefined,
         })
 
+        // Revalida o health status
+        refetchHealth()
+        queryClient.invalidateQueries({ queryKey: ['settings'] })
+    }, [refetchHealth, queryClient])
+
+    // Handler para marcar onboarding como completo (chamado quando o usuário finaliza TODO o fluxo)
+    const handleMarkOnboardingComplete = useCallback(async () => {
         // Marca o onboarding como completo no localStorage (para compatibilidade)
         completeOnboarding()
 
@@ -629,11 +636,7 @@ export function DashboardShell({
         } catch (error) {
             console.error('Erro ao salvar status do onboarding no banco:', error)
         }
-
-        // Revalida o health status (fonte da verdade para o checklist)
-        refetchHealth()
-        queryClient.invalidateQueries({ queryKey: ['settings'] })
-    }, [completeOnboarding, refetchHealth, refetchOnboardingStatus, queryClient])
+    }, [completeOnboarding, refetchOnboardingStatus])
 
     // Sidebar callback - DEVE estar antes de qualquer early return
     const handleCloseMobileMenu = useCallback(() => setIsMobileMenuOpen(false), [])
@@ -687,13 +690,21 @@ export function DashboardShell({
     }
 
     // Determina se deve mostrar o modal de onboarding do WhatsApp
-    // Mostra quando: infra OK + WhatsApp não conectado + onboarding não completado (nem no banco nem no localStorage)
-    // Nota: needsWebhookSetup foi removido porque causava loop - se o webhook precisa de setup,
-    // o checklist vai mostrar o botão "Configurar" sem forçar o modal
+    // Mostra quando:
+    // 1. Infra OK
+    // 2. Onboarding não marcado como completo no banco
+    // 3. E uma das condições:
+    //    a) WhatsApp não conectado (precisa fazer wizard inicial)
+    //    b) WhatsApp conectado MAS wizard ainda em andamento (currentStep não é 'complete' nem 'welcome')
+    const isWizardInProgress = onboardingProgress.currentStep !== 'complete' &&
+                               onboardingProgress.currentStep !== 'welcome' &&
+                               onboardingProgress.path !== null
+
     const showWhatsAppOnboarding = !needsSetup &&
-        !isWhatsAppConnected &&
-        !isOnboardingCompletedInDb &&
-        shouldShowOnboardingModal
+        !isOnboardingCompletedInDb && (
+            !isWhatsAppConnected || // Caso 1: precisa conectar
+            (isWhatsAppConnected && isWizardInProgress) // Caso 2: conectou mas wizard não terminou
+        )
 
     const isBuilderRoute = pathname?.startsWith('/builder') ?? false
     const isInboxRoute = pathname?.startsWith('/inbox') ?? false
@@ -854,7 +865,8 @@ export function DashboardShell({
                 {showWhatsAppOnboarding && (
                     <OnboardingModal
                         isConnected={!!isWhatsAppConnected}
-                        onComplete={handleOnboardingComplete}
+                        onSaveCredentials={handleSaveCredentials}
+                        onMarkComplete={handleMarkOnboardingComplete}
                     />
                 )}
 
