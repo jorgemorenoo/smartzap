@@ -2025,7 +2025,7 @@ export default function CampaignsNewRealPage() {
                     </div>
                     <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-3">
                       {[
-                        { label: 'Todos', value: 'todos', helper: '221 contatos elegíveis' },
+                        { label: 'Todos', value: 'todos', helper: `${statsQuery.data?.optIn ?? 0} contatos elegíveis` },
                         { label: 'Segmentos', value: 'segmentos', helper: 'Filtrar por tags, DDI ou UF' },
                         { label: 'Teste', value: 'teste', helper: 'Enviar para contato de teste' },
                       ].map((item) => (
@@ -2056,11 +2056,11 @@ export default function CampaignsNewRealPage() {
                   </div>
                   <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-3">
                     <div className="rounded-xl border border-[var(--ds-border-default)] bg-[var(--ds-bg-elevated)] p-4 text-center">
-                      <p className="text-2xl font-semibold text-[var(--ds-text-primary)]">221</p>
+                      <p className="text-2xl font-semibold text-[var(--ds-text-primary)]">{statsQuery.data?.optIn ?? 0}</p>
                       <p className="text-xs text-[var(--ds-text-muted)]">Elegíveis</p>
                     </div>
                     <div className="rounded-xl border border-[var(--ds-border-default)] bg-[var(--ds-bg-elevated)] p-4 text-center">
-                      <p className="text-2xl font-semibold text-amber-700 dark:text-amber-200">6</p>
+                      <p className="text-2xl font-semibold text-amber-700 dark:text-amber-200">{statsQuery.data?.optOut ?? 0}</p>
                       <p className="text-xs text-[var(--ds-text-muted)]">Suprimidos</p>
                     </div>
                     <div className="rounded-xl border border-[var(--ds-border-default)] bg-[var(--ds-bg-elevated)] p-4 text-center">
