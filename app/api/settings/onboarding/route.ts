@@ -1,18 +1,25 @@
 import { NextResponse } from 'next/server'
 import { settingsDb } from '@/lib/supabase-db'
 
-const SETTING_KEY = 'permanent_token_confirmed'
+const KEYS = {
+  onboardingCompleted: 'onboarding_completed',
+  permanentTokenConfirmed: 'permanent_token_confirmed',
+}
 
 /**
  * GET /api/settings/onboarding
- * Retorna o status da confirmação do token permanente
+ * Retorna o status do onboarding (completo + token permanente)
  */
 export async function GET() {
   try {
-    const value = await settingsDb.get(SETTING_KEY)
+    const [onboardingCompleted, permanentTokenConfirmed] = await Promise.all([
+      settingsDb.get(KEYS.onboardingCompleted),
+      settingsDb.get(KEYS.permanentTokenConfirmed),
+    ])
 
     return NextResponse.json({
-      permanentTokenConfirmed: value === 'true',
+      onboardingCompleted: onboardingCompleted === 'true',
+      permanentTokenConfirmed: permanentTokenConfirmed === 'true',
     })
   } catch (error) {
     console.error('Erro ao buscar settings de onboarding:', error)
@@ -25,25 +32,37 @@ export async function GET() {
 
 /**
  * POST /api/settings/onboarding
- * Salva a confirmação do token permanente
+ * Salva configurações do onboarding
+ * Body: { onboardingCompleted?: boolean, permanentTokenConfirmed?: boolean }
  */
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { permanentTokenConfirmed } = body
+    const { onboardingCompleted, permanentTokenConfirmed } = body
 
-    if (typeof permanentTokenConfirmed !== 'boolean') {
+    const updates: Promise<void>[] = []
+
+    if (typeof onboardingCompleted === 'boolean') {
+      updates.push(settingsDb.set(KEYS.onboardingCompleted, onboardingCompleted ? 'true' : 'false'))
+    }
+
+    if (typeof permanentTokenConfirmed === 'boolean') {
+      updates.push(settingsDb.set(KEYS.permanentTokenConfirmed, permanentTokenConfirmed ? 'true' : 'false'))
+    }
+
+    if (updates.length === 0) {
       return NextResponse.json(
-        { error: 'Campo permanentTokenConfirmed deve ser boolean' },
+        { error: 'Nenhum campo válido fornecido' },
         { status: 400 }
       )
     }
 
-    await settingsDb.set(SETTING_KEY, permanentTokenConfirmed ? 'true' : 'false')
+    await Promise.all(updates)
 
     return NextResponse.json({
       success: true,
-      permanentTokenConfirmed,
+      onboardingCompleted: typeof onboardingCompleted === 'boolean' ? onboardingCompleted : undefined,
+      permanentTokenConfirmed: typeof permanentTokenConfirmed === 'boolean' ? permanentTokenConfirmed : undefined,
     })
   } catch (error) {
     console.error('Erro ao salvar settings de onboarding:', error)

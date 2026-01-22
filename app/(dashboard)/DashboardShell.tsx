@@ -458,13 +458,28 @@ export function DashboardShell({
     // Dev mode for hiding dev-only nav items
     const { isDevMode } = useDevMode()
 
-    // WhatsApp onboarding progress hook
+    // WhatsApp onboarding progress hook (localStorage)
     const {
         progress: onboardingProgress,
         shouldShowOnboardingModal,
         shouldShowChecklist,
         completeOnboarding,
     } = useOnboardingProgress()
+
+    // Onboarding status from database (fonte da verdade)
+    const { data: onboardingDbStatus, refetch: refetchOnboardingStatus } = useQuery({
+        queryKey: ['onboardingStatus'],
+        queryFn: async () => {
+            const response = await fetch('/api/settings/onboarding')
+            if (!response.ok) throw new Error('Failed to fetch onboarding status')
+            return response.json() as Promise<{ onboardingCompleted: boolean; permanentTokenConfirmed: boolean }>
+        },
+        staleTime: 5 * 60 * 1000,
+        gcTime: 10 * 60 * 1000,
+    })
+
+    // Onboarding está completo se marcado no banco OU no localStorage
+    const isOnboardingCompletedInDb = onboardingDbStatus?.onboardingCompleted ?? false
 
     const { data: authStatus } = useQuery({
         queryKey: ['authStatus'],
@@ -600,13 +615,25 @@ export function DashboardShell({
             testContact: undefined,
         })
 
-        // Marca o onboarding como completo
+        // Marca o onboarding como completo no localStorage (para compatibilidade)
         completeOnboarding()
+
+        // Marca o onboarding como completo no banco de dados (fonte da verdade)
+        try {
+            await fetch('/api/settings/onboarding', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ onboardingCompleted: true }),
+            })
+            refetchOnboardingStatus()
+        } catch (error) {
+            console.error('Erro ao salvar status do onboarding no banco:', error)
+        }
 
         // Revalida o health status (fonte da verdade para o checklist)
         refetchHealth()
         queryClient.invalidateQueries({ queryKey: ['settings'] })
-    }, [completeOnboarding, refetchHealth, queryClient])
+    }, [completeOnboarding, refetchHealth, refetchOnboardingStatus, queryClient])
 
     // Sidebar callback - DEVE estar antes de qualquer early return
     const handleCloseMobileMenu = useCallback(() => setIsMobileMenuOpen(false), [])
@@ -660,9 +687,13 @@ export function DashboardShell({
     }
 
     // Determina se deve mostrar o modal de onboarding do WhatsApp
-    // Mostra quando: infra OK + (WhatsApp não conectado OU onboarding não completado OU webhook não configurado)
+    // Mostra quando: infra OK + WhatsApp não conectado + onboarding não completado (nem no banco nem no localStorage)
+    // Nota: needsWebhookSetup foi removido porque causava loop - se o webhook precisa de setup,
+    // o checklist vai mostrar o botão "Configurar" sem forçar o modal
     const showWhatsAppOnboarding = !needsSetup &&
-        (!isWhatsAppConnected || shouldShowOnboardingModal || needsWebhookSetup)
+        !isWhatsAppConnected &&
+        !isOnboardingCompletedInDb &&
+        shouldShowOnboardingModal
 
     const isBuilderRoute = pathname?.startsWith('/builder') ?? false
     const isInboxRoute = pathname?.startsWith('/inbox') ?? false
@@ -824,7 +855,6 @@ export function DashboardShell({
                     <OnboardingModal
                         isConnected={!!isWhatsAppConnected}
                         onComplete={handleOnboardingComplete}
-                        forceStep={needsWebhookSetup ? 'configure-webhook' : undefined}
                     />
                 )}
 
