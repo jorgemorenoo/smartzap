@@ -8,10 +8,18 @@
  * - Persistência de estado entre steps
  *
  * Disparo: via Client.trigger() no inbox-webhook.ts
+ *
+ * IMPORTANTE: maxDuration é necessário porque:
+ * - Cada invocação do workflow re-executa a função
+ * - O SDK replays steps anteriores, mas código normal ainda executa
+ * - Se a função timeout ANTES de chegar ao próximo step, workflow trava
  */
 
 import { serve } from '@upstash/workflow/nextjs'
 import { processInboxAIWorkflow } from '@/lib/inbox/inbox-ai-workflow'
+
+// Permite até 60 segundos para cada invocação do workflow (requer Vercel Pro)
+export const maxDuration = 60
 
 export const { POST } = serve(processInboxAIWorkflow, {
   // Retry com backoff exponencial

@@ -179,7 +179,7 @@ export function startAmbient(): void {
         ambientPlaying = true;
         console.log('[SoundFX] Audio playing! Starting fade in...');
         // Fade in simples com setInterval
-        fadeVolume(ambientAudio!, 0.3, 3000);
+        fadeVolume(ambientAudio!, 0.15, 3000);
       })
       .catch((error) => {
         console.error('[SoundFX] Play failed:', error.name, error.message);

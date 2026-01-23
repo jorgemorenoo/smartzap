@@ -193,54 +193,21 @@ export async function processInboxAIWorkflow(context: WorkflowContext) {
   // Step 3: Processar com IA via context.call()
   // =========================================================================
 
-  console.log(`🤖 [WORKFLOW] ========================================`)
-  console.log(`🤖 [WORKFLOW] Step 3: STARTING AI PROCESSING`)
-  console.log(`🤖 [WORKFLOW] Agent: ${agent.name}`)
-  console.log(`🤖 [WORKFLOW] Model: ${agent.model}`)
-  console.log(`🤖 [WORKFLOW] Messages: ${messages.length}`)
-  console.log(`🤖 [WORKFLOW] ========================================`)
+  console.log(`🤖 [WORKFLOW] Step 3: AI processing | Agent: ${agent.name} | Messages: ${messages.length}`)
 
   // Monta a URL do endpoint interno - com fallback hardcoded para produção
-  const envAppUrl = process.env.NEXT_PUBLIC_APP_URL
-  const envVercelUrl = process.env.VERCEL_URL
-  const fallbackUrl = 'https://smartzapv3.vercel.app'
-
-  const baseUrl = envAppUrl || envVercelUrl || fallbackUrl
-
-  console.log(`🔗 [WORKFLOW] URL Config:`)
-  console.log(`🔗 [WORKFLOW]   NEXT_PUBLIC_APP_URL = "${envAppUrl || 'undefined'}"`)
-  console.log(`🔗 [WORKFLOW]   VERCEL_URL = "${envVercelUrl || 'undefined'}"`)
-  console.log(`🔗 [WORKFLOW]   Fallback = "${fallbackUrl}"`)
-  console.log(`🔗 [WORKFLOW]   Final baseUrl = "${baseUrl}"`)
-
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL || 'https://smartzapv3.vercel.app'
   const aiEndpointUrl = baseUrl.startsWith('http')
     ? `${baseUrl}/api/internal/ai-generate`
     : `https://${baseUrl}/api/internal/ai-generate`
 
-  console.log(`🔗 [WORKFLOW] AI Endpoint URL: ${aiEndpointUrl}`)
-
   const apiKey = process.env.SMARTZAP_API_KEY
-  console.log(`🔑 [WORKFLOW] SMARTZAP_API_KEY exists: ${!!apiKey}`)
-  console.log(`🔑 [WORKFLOW] SMARTZAP_API_KEY length: ${apiKey ? apiKey.length : 0}`)
+  console.log(`🔗 [WORKFLOW] Calling ${aiEndpointUrl} | API key: ${!!apiKey}`)
 
   if (!apiKey) {
     console.error(`❌ [WORKFLOW] SMARTZAP_API_KEY NOT CONFIGURED!`)
-
-    // Registra o erro como um step para visibilidade no dashboard
-    await context.run('error-missing-api-key', async () => {
-      console.error(`❌ [ERROR-STEP] SMARTZAP_API_KEY not configured in environment!`)
-      console.error(`❌ [ERROR-STEP] Available env vars:`, Object.keys(process.env).filter(k => k.includes('SMART') || k.includes('API')))
-      return { error: 'SMARTZAP_API_KEY not configured' }
-    })
     return { status: 'error', error: 'API_KEY not configured' }
   }
-
-  console.log(`🚀 [WORKFLOW] About to call context.call('process-ai')...`)
-  console.log(`🚀 [WORKFLOW] Request config:`)
-  console.log(`🚀 [WORKFLOW]   URL: ${aiEndpointUrl}`)
-  console.log(`🚀 [WORKFLOW]   Method: POST`)
-  console.log(`🚀 [WORKFLOW]   Timeout: 60s`)
-  console.log(`🚀 [WORKFLOW]   Retries: 2`)
 
   // Tipo de resposta do endpoint de IA
   type AICallResponse = {
@@ -255,8 +222,7 @@ export async function processInboxAIWorkflow(context: WorkflowContext) {
     error?: string
   }
 
-  // Chama o endpoint via context.call() - workflow hiberna enquanto espera
-  console.log(`📡 [WORKFLOW] CALLING context.call('process-ai') NOW...`)
+  console.log(`📡 [WORKFLOW] Calling context.call('process-ai')...`)
 
   const aiCallResult = await context.call<AICallResponse>('process-ai', {
     url: aiEndpointUrl,
@@ -274,10 +240,7 @@ export async function processInboxAIWorkflow(context: WorkflowContext) {
     timeout: 60, // 60 segundos de timeout
   })
 
-  console.log(`📡 [WORKFLOW] context.call RETURNED!`)
-  console.log(`📡 [WORKFLOW] Response status: ${aiCallResult.status}`)
-  console.log(`📡 [WORKFLOW] Response header:`, JSON.stringify(aiCallResult.header))
-  console.log(`📡 [WORKFLOW] Response body:`, JSON.stringify(aiCallResult.body))
+  console.log(`📡 [WORKFLOW] context.call returned: status=${aiCallResult.status}`)
 
   // Verifica se a chamada HTTP foi bem sucedida
   if (aiCallResult.status !== 200) {
