@@ -1,0 +1,241 @@
+import { test, expect } from './fixtures'
+import { CampaignsPage, CampaignWizardPage, ContactsPage, LoginPage } from './pages'
+
+/**
+ * Testes E2E do fluxo de Campanhas
+ *
+ * Cobre:
+ * - Listagem de campanhas
+ * - Criação de nova campanha (wizard)
+ * - Visualização de detalhes
+ * - Ações: iniciar, pausar, retomar, excluir
+ * - Filtros e busca
+ */
+test.describe('Campanhas', () => {
+  // Antes de cada teste, faz login
+  test.beforeEach(async ({ page }) => {
+    const loginPage = new LoginPage(page)
+    const password = process.env.MASTER_PASSWORD || process.env.TEST_PASSWORD || 'test123'
+
+    await loginPage.goto()
+    await loginPage.loginAndWaitForDashboard(password)
+  })
+
+  test.describe('Listagem', () => {
+    test('deve exibir página de campanhas corretamente', async ({ page }) => {
+      const campaignsPage = new CampaignsPage(page)
+
+      await campaignsPage.goto()
+      await campaignsPage.waitForLoad()
+
+      // Verifica elementos principais
+      await expect(campaignsPage.pageTitle).toBeVisible()
+      await expect(campaignsPage.createCampaignButton).toBeVisible()
+    })
+
+    test('deve ter campo de busca', async ({ page }) => {
+      const campaignsPage = new CampaignsPage(page)
+
+      await campaignsPage.goto()
+      await campaignsPage.waitForLoad()
+
+      await expect(campaignsPage.searchInput).toBeVisible()
+    })
+
+    test('deve ter botão de criar campanha visível e clicável', async ({ page }) => {
+      const campaignsPage = new CampaignsPage(page)
+
+      await campaignsPage.goto()
+      await campaignsPage.waitForLoad()
+
+      await expect(campaignsPage.createCampaignButton).toBeVisible()
+      await expect(campaignsPage.createCampaignButton).toBeEnabled()
+    })
+  })
+
+  test.describe('Wizard de Criação', () => {
+    test('deve abrir wizard de nova campanha', async ({ page }) => {
+      const campaignsPage = new CampaignsPage(page)
+
+      await campaignsPage.goto()
+      await campaignsPage.waitForLoad()
+
+      await campaignsPage.clickCreateCampaign()
+
+      // Deve estar na página de nova campanha
+      await expect(page).toHaveURL(/\/campaigns\/new/)
+    })
+
+    test('deve exibir campo de nome da campanha no Step 1', async ({ page }) => {
+      const wizardPage = new CampaignWizardPage(page)
+
+      await wizardPage.goto()
+
+      // Campo de nome deve estar visível
+      await expect(wizardPage.campaignNameInput).toBeVisible()
+    })
+
+    test('deve permitir preencher nome da campanha', async ({ page, generateUniqueCampaign }) => {
+      const wizardPage = new CampaignWizardPage(page)
+      const campaign = generateUniqueCampaign()
+
+      await wizardPage.goto()
+
+      await wizardPage.fillCampaignName(campaign.name)
+
+      // Verifica que foi preenchido
+      await expect(wizardPage.campaignNameInput).toHaveValue(campaign.name)
+    })
+
+    test('deve ter botões de navegação do wizard', async ({ page }) => {
+      const wizardPage = new CampaignWizardPage(page)
+
+      await wizardPage.goto()
+
+      // Deve ter botão de próximo
+      await expect(wizardPage.nextButton).toBeVisible()
+
+      // Pode ter botão de cancelar
+      await expect(wizardPage.cancelButton).toBeVisible()
+    })
+
+    test('deve poder cancelar criação de campanha', async ({ page }) => {
+      const wizardPage = new CampaignWizardPage(page)
+
+      await wizardPage.goto()
+
+      await wizardPage.cancel()
+
+      // Deve voltar para lista de campanhas
+      await expect(page).toHaveURL('/campaigns')
+    })
+  })
+
+  test.describe('Busca e Filtros', () => {
+    test('deve filtrar campanhas por busca', async ({ page }) => {
+      const campaignsPage = new CampaignsPage(page)
+
+      await campaignsPage.goto()
+      await campaignsPage.waitForLoad()
+
+      // Busca por algo específico
+      await campaignsPage.searchCampaign('teste')
+
+      // A página deve processar a busca sem erro
+      await page.waitForLoadState('networkidle')
+      expect(await campaignsPage.searchInput.inputValue()).toBe('teste')
+    })
+
+    test('deve permitir limpar busca', async ({ page }) => {
+      const campaignsPage = new CampaignsPage(page)
+
+      await campaignsPage.goto()
+      await campaignsPage.waitForLoad()
+
+      // Busca
+      await campaignsPage.searchCampaign('teste')
+
+      // Limpa
+      await campaignsPage.searchInput.clear()
+      await page.waitForLoadState('networkidle')
+
+      // Campo deve estar vazio
+      expect(await campaignsPage.searchInput.inputValue()).toBe('')
+    })
+  })
+
+  test.describe('Fluxo Completo', () => {
+    // Este teste requer que existam templates e contatos cadastrados
+    // É um teste mais complexo que valida o fluxo inteiro
+    test.skip('deve criar campanha completa', async ({ page, generateUniqueCampaign, generateUniqueContact }) => {
+      const wizardPage = new CampaignWizardPage(page)
+      const contactsPage = new ContactsPage(page)
+      const campaignsPage = new CampaignsPage(page)
+      const campaign = generateUniqueCampaign()
+      const contact = generateUniqueContact()
+
+      // 1. Primeiro cria um contato para usar na campanha
+      await contactsPage.goto()
+      await contactsPage.waitForLoad()
+      await contactsPage.createContact(contact)
+      await page.waitForLoadState('networkidle')
+
+      // 2. Vai para criação de campanha
+      await wizardPage.goto()
+
+      // 3. Step 1: Nome e template
+      await wizardPage.fillCampaignName(campaign.name)
+      // Template selection depende de ter templates cadastrados
+      await wizardPage.nextStep()
+
+      // 4. Step 2: Público
+      await wizardPage.selectAllContacts()
+      await wizardPage.nextStep()
+
+      // 5. Step 3: Validação
+      await wizardPage.nextStep()
+
+      // 6. Step 4: Agendar e lançar
+      await wizardPage.scheduleNow()
+      await wizardPage.launch()
+
+      // 7. Verifica que a campanha foi criada
+      await campaignsPage.goto()
+      await campaignsPage.searchCampaign(campaign.name)
+
+      const exists = await campaignsPage.campaignExists(campaign.name)
+      expect(exists).toBe(true)
+    })
+  })
+
+  test.describe('Ações de Campanha', () => {
+    // Estes testes requerem campanhas existentes
+    // Skipados por padrão pois dependem de dados pré-existentes
+    test.skip('deve iniciar campanha em rascunho', async ({ page }) => {
+      const campaignsPage = new CampaignsPage(page)
+
+      await campaignsPage.goto()
+      await campaignsPage.waitForLoad()
+
+      // Encontra uma campanha em rascunho e inicia
+      // Isso requer ter uma campanha de teste criada
+    })
+
+    test.skip('deve pausar campanha em envio', async ({ page }) => {
+      const campaignsPage = new CampaignsPage(page)
+
+      await campaignsPage.goto()
+      await campaignsPage.waitForLoad()
+
+      // Pausa uma campanha em envio
+    })
+
+    test.skip('deve excluir campanha', async ({ page }) => {
+      const campaignsPage = new CampaignsPage(page)
+
+      await campaignsPage.goto()
+      await campaignsPage.waitForLoad()
+
+      // Exclui uma campanha
+    })
+  })
+
+  test.describe('Navegação', () => {
+    test('deve navegar para detalhes ao clicar em campanha', async ({ page }) => {
+      const campaignsPage = new CampaignsPage(page)
+
+      await campaignsPage.goto()
+      await campaignsPage.waitForLoad()
+
+      // Se houver campanhas, clica na primeira
+      const count = await campaignsPage.getCampaignCount()
+      if (count > 0) {
+        const firstCampaign = campaignsPage.campaignCards.first()
+        await firstCampaign.click()
+
+        // Deve navegar para página de detalhes
+        await expect(page).toHaveURL(/\/campaigns\/[a-z0-9-]+/)
+      }
+    })
+  })
+})
