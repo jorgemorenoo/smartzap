@@ -118,6 +118,24 @@ function calculateProgress(completedSteps: number, currentStepProgress = 0): num
   return Math.min(Math.round(((completedWeight + currentWeight) / totalWeight) * 100), 99);
 }
 
+function buildDirectDbUrl(projectRef: string, dbPass: string): string {
+  return `postgresql://postgres:${encodeURIComponent(dbPass)}@db.${projectRef}.supabase.co:5432/postgres?sslmode=require`;
+}
+
+function isDbConnectionError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  const lower = message.toLowerCase();
+  return (
+    lower.includes('tenant or user not found') ||
+    lower.includes('connection') ||
+    lower.includes('econnrefused') ||
+    lower.includes('etimedout') ||
+    lower.includes('timeout') ||
+    lower.includes('enotfound') ||
+    lower.includes('eai_again')
+  );
+}
+
 async function validateVercelToken(token: string): Promise<{ projectId: string; projectName: string; teamId?: string }> {
   // List projects to validate token and find smartzap project
   const res = await fetch('https://api.vercel.com/v9/projects?limit=100', {
@@ -324,6 +342,7 @@ export async function POST(req: Request) {
     let anonKey = '';
     let serviceRoleKey = '';
     let dbUrl = '';
+    let fallbackDbUrl = '';
 
     try {
       // Step 1: Validate Vercel token
@@ -440,24 +459,38 @@ export async function POST(req: Request) {
 
       // Resolve DB URL
       if (supabaseProject.dbPass) {
-        console.log('[provision] 📍 Step 5/12: Resolving DB URL...');
+        console.log('[provision] 📍 Step 5/12: Preparando DB URL direta...');
+        dbUrl = buildDirectDbUrl(supabaseProject.projectRef, supabaseProject.dbPass);
+        console.log('[provision] ✅ Step 5/12: DB URL direta pronta', { host: `db.${supabaseProject.projectRef}.supabase.co` });
+
+        console.log('[provision] 📍 Step 5/12: Resolving DB URL (pooler fallback)...');
         const poolerResult = await resolveSupabaseDbUrl({
           projectRef: supabaseProject.projectRef,
           accessToken: supabase.pat,
         });
 
         if (poolerResult.ok) {
-          const poolerHost = poolerResult.host;
-          dbUrl = `postgresql://postgres.${supabaseProject.projectRef}:${encodeURIComponent(supabaseProject.dbPass)}@${poolerHost}:6543/postgres?sslmode=require&pgbouncer=true`;
-          console.log('[provision] ✅ Step 5/12: DB URL resolved', { host: poolerHost });
+          fallbackDbUrl = poolerResult.dbUrl;
+          console.log('[provision] ✅ Step 5/12: DB URL pooler resolvida', { host: poolerResult.host });
         } else {
-          console.warn('[provision] ⚠️ Step 5/12: Failed to resolve DB URL - migrations will be skipped!');
+          console.warn('[provision] ⚠️ Step 5/12: Pooler indisponível - seguindo com conexão direta');
         }
       } else {
-        console.warn('[provision] ⚠️ Step 5/12: No dbPass available - migrations will be skipped!');
+        console.log('[provision] 📍 Step 5/12: dbPass ausente, usando pooler...');
+        const poolerResult = await resolveSupabaseDbUrl({
+          projectRef: supabaseProject.projectRef,
+          accessToken: supabase.pat,
+        });
+
+        if (poolerResult.ok) {
+          dbUrl = poolerResult.dbUrl;
+          console.log('[provision] ✅ Step 5/12: DB URL pooler resolvida', { host: poolerResult.host });
+        } else {
+          console.warn('[provision] ⚠️ Step 5/12: No dbPass and failed to resolve pooler - migrations will be skipped!');
+        }
       }
 
-      console.log('[provision] ✅ Step 5/12: Resolve Supabase Keys - COMPLETO', { hasDbUrl: !!dbUrl });
+      console.log('[provision] ✅ Step 5/12: Resolve Supabase Keys - COMPLETO', { hasDbUrl: !!dbUrl, hasFallback: !!fallbackDbUrl });
       stepIndex++;
 
       // Step 6: Validate QStash
@@ -551,15 +584,34 @@ export async function POST(req: Request) {
 
       if (dbUrl) {
         console.log('[provision] 📍 Step 9/12: Checking if schema exists...');
-        const schemaExists = await checkSchemaApplied(dbUrl);
+        let activeDbUrl = dbUrl;
+        let schemaExists = await checkSchemaApplied(activeDbUrl);
         console.log('[provision] 📍 Step 9/12: schemaExists =', schemaExists);
         if (!schemaExists) {
           console.log('[provision] 📍 Step 9/12: Running migrations...');
-          await runSchemaMigration(dbUrl);
-          console.log('[provision] ✅ Step 9/12: Migrations completed, waiting 5s for schema cache...');
-          // Wait for schema cache to update
-          await new Promise((r) => setTimeout(r, 5000));
-          console.log('[provision] ✅ Step 9/12: Schema cache wait complete');
+          try {
+            await runSchemaMigration(activeDbUrl);
+            console.log('[provision] ✅ Step 9/12: Migrations completed, waiting 5s for schema cache...');
+            // Wait for schema cache to update
+            await new Promise((r) => setTimeout(r, 5000));
+            console.log('[provision] ✅ Step 9/12: Schema cache wait complete');
+          } catch (err) {
+            if (fallbackDbUrl && fallbackDbUrl !== activeDbUrl && isDbConnectionError(err)) {
+              console.warn('[provision] ⚠️ Step 9/12: Primary DB falhou, tentando fallback pooler...');
+              activeDbUrl = fallbackDbUrl;
+              schemaExists = await checkSchemaApplied(activeDbUrl);
+              if (!schemaExists) {
+                await runSchemaMigration(activeDbUrl);
+                console.log('[provision] ✅ Step 9/12: Migrations completed via fallback, waiting 5s for schema cache...');
+                await new Promise((r) => setTimeout(r, 5000));
+                console.log('[provision] ✅ Step 9/12: Schema cache wait complete (fallback)');
+              } else {
+                console.log('[provision] ℹ️ Step 9/12: Schema already exists on fallback, skipping migrations');
+              }
+            } else {
+              throw err;
+            }
+          }
         } else {
           console.log('[provision] ℹ️ Step 9/12: Schema already exists, skipping migrations');
         }
