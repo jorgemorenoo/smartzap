@@ -42,6 +42,12 @@ const nextConfig: NextConfig = {
   // to direct module imports, reducing bundle size significantly
   experimental: {
     optimizePackageImports: ['lucide-react', '@radix-ui/react-icons'],
+    // Aumentar limite de body para uploads de mídia (vídeos até 16MB)
+    serverActions: {
+      bodySizeLimit: '20mb',
+    },
+    // Aumentar limite para proxy e middleware (necessário para uploads grandes)
+    proxyClientMaxBodySize: '20mb',
   },
 
   // Include SQL migration files in the serverless bundle
