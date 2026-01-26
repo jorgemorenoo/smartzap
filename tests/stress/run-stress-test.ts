@@ -113,17 +113,17 @@ async function sendRequest(phone: string): Promise<void> {
 
 /**
  * Worker que envia requisições continuamente
+ * Cada worker representa um usuário real com telefone fixo (conversa contínua)
  */
 async function worker(workerId: number, stopSignal: () => boolean): Promise<void> {
-  while (!stopSignal()) {
-    // Cada worker pega um número de telefone único
-    const myPhoneIndex = phoneIndex++
-    const phone = generateUniquePhone(myPhoneIndex % 100000) // Cicla após 100k números
+  // Telefone fixo por worker - simula usuário real conversando
+  const phone = generateUniquePhone(workerId)
 
+  while (!stopSignal()) {
     await sendRequest(phone)
 
-    // Pequeno delay entre requisições do mesmo worker (evita sobrecarga do client)
-    await new Promise(resolve => setTimeout(resolve, 10))
+    // Delay entre mensagens do mesmo usuário (simula tempo de digitação)
+    await new Promise(resolve => setTimeout(resolve, 50))
   }
 }
 
