@@ -98,6 +98,12 @@ export function getSupabaseBrowser(): SupabaseClient | null {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL
     const key = getSupabasePublishableKey()
 
+    // #region agent log
+    const urlHost = url ? (() => { try { return new URL(url).hostname } catch { return 'invalid' } })() : 'missing'
+    fetch('http://127.0.0.1:7243/ingest/1294d6ce-76f2-430d-96ab-3ae4d7527327',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H3',location:'lib/supabase.ts:97',message:'Supabase browser env',data:{hasUrl:!!url,hasKey:!!key,keyLength:key?key.length:0,urlHost},timestamp:Date.now()})}).catch(()=>{});
+    console.log('[debug][supabase-browser] env', { hasUrl: !!url, hasKey: !!key, keyLength: key ? key.length : 0, urlHost });
+    // #endregion
+
     if (!url || !key) {
         // Return null when not configured - allows app to boot for setup wizard
         return null
