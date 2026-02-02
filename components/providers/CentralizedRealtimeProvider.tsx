@@ -185,14 +185,14 @@ export function CentralizedRealtimeProvider({
 
     // Cleanup
     return () => {
-      debouncedInvalidate.cancel?.()
+      debouncedFlush.cancel?.()
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current)
         channelRef.current = null
       }
       isConnectedRef.current = false
     }
-  }, [tables.join(','), notifySubscribers, debouncedInvalidate])
+  }, [tables.join(','), notifySubscribers, debouncedInvalidate, debouncedFlush])
 
   // Subscribe function for consumers
   const subscribe = useCallback((table: string, callback: SubscriptionCallback): (() => void) => {
