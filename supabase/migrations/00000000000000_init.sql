@@ -303,9 +303,14 @@ Se o cliente estiver frustrado ou insatisfeito:
 2. Ofereça a OPÇÃO de falar com humano
 3. Só transfira se ele aceitar'::text,
     booking_tool_enabled boolean DEFAULT false NOT NULL,
+    allow_reactions boolean DEFAULT true,
+    allow_quotes boolean DEFAULT true,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
+
+COMMENT ON COLUMN public.ai_agents.allow_reactions IS 'Permite que o agente envie reações (emoji) às mensagens do usuário';
+COMMENT ON COLUMN public.ai_agents.allow_quotes IS 'Permite que o agente cite mensagens do usuário nas respostas';
 
 CREATE TABLE public.ai_embeddings (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -753,14 +758,15 @@ DECLARE
   v_automation_paused_until TIMESTAMPTZ;
   v_is_new_conversation BOOLEAN := FALSE;
   v_message_preview TEXT;
-  v_contact_id UUID;
-  v_current_contact_id UUID;
+  -- FIX: Mudado de UUID para TEXT (contacts.id usa prefixo 'ct_')
+  v_contact_id TEXT;
+  v_current_contact_id TEXT;
 BEGIN
   -- Auto-lookup contact by phone if not provided
   IF p_contact_id IS NULL THEN
     SELECT id INTO v_contact_id FROM contacts WHERE phone = p_phone LIMIT 1;
   ELSE
-    v_contact_id := p_contact_id::UUID;
+    v_contact_id := p_contact_id;  -- Já é TEXT, não precisa de cast
   END IF;
 
   -- Trunca preview para 100 chars
@@ -817,7 +823,7 @@ BEGIN
       last_message_at = NOW(),
       last_message_preview = v_message_preview,
       status = CASE WHEN status = 'closed' THEN 'open' ELSE status END,
-      contact_id = COALESCE(contact_id, v_contact_id),
+      contact_id = COALESCE(contact_id, v_contact_id),  -- Agora ambos são TEXT
       updated_at = NOW()
     WHERE id = v_conversation_id
     RETURNING status INTO v_conversation_status;
@@ -1932,3 +1938,53 @@ ALTER PUBLICATION supabase_realtime ADD TABLE campaigns;
 ALTER PUBLICATION supabase_realtime ADD TABLE campaign_contacts;
 ALTER PUBLICATION supabase_realtime ADD TABLE inbox_conversations;
 ALTER PUBLICATION supabase_realtime ADD TABLE inbox_messages;
+ALTER PUBLICATION supabase_realtime ADD TABLE contacts;
+ALTER PUBLICATION supabase_realtime ADD TABLE templates;
+ALTER PUBLICATION supabase_realtime ADD TABLE flows;
+ALTER PUBLICATION supabase_realtime ADD TABLE account_alerts;
+ALTER PUBLICATION supabase_realtime ADD TABLE template_project_items;
+ALTER PUBLICATION supabase_realtime ADD TABLE template_projects;
+ALTER PUBLICATION supabase_realtime ADD TABLE flow_submissions;
+
+-- =============================================================================
+-- REPLICA IDENTITY FULL
+-- Permite filtros Realtime por qualquer coluna (não apenas PK)
+-- =============================================================================
+
+ALTER TABLE campaign_contacts REPLICA IDENTITY FULL;
+ALTER TABLE inbox_messages REPLICA IDENTITY FULL;
+ALTER TABLE template_project_items REPLICA IDENTITY FULL;
+ALTER TABLE flow_submissions REPLICA IDENTITY FULL;
+
+-- =============================================================================
+-- GRANTS para role anon (JOINs em Server Actions)
+-- GRANT SELECT satisfaz PostgREST para embedded resources,
+-- mas RLS USING(false) bloqueia leitura direta via REST API.
+-- =============================================================================
+
+GRANT SELECT ON campaign_contacts TO anon;
+GRANT SELECT ON inbox_conversation_labels TO anon;
+GRANT SELECT ON inbox_labels TO anon;
+GRANT SELECT ON ai_agents TO anon;
+GRANT SELECT ON campaign_folders TO anon;
+GRANT SELECT ON campaign_tag_assignments TO anon;
+GRANT SELECT ON campaign_tags TO anon;
+GRANT SELECT ON template_project_items TO anon;
+GRANT SELECT ON template_projects TO anon;
+GRANT SELECT ON flow_submissions TO anon;
+
+-- =============================================================================
+-- RLS Policies para bloquear leitura direta do anon via REST API
+-- O Realtime recebe eventos via WAL (server-side, não passa por RLS)
+-- =============================================================================
+
+CREATE POLICY deny_anon_select ON campaign_contacts FOR SELECT TO anon USING (false);
+CREATE POLICY deny_anon_select ON inbox_conversation_labels FOR SELECT TO anon USING (false);
+CREATE POLICY deny_anon_select ON inbox_labels FOR SELECT TO anon USING (false);
+CREATE POLICY deny_anon_select ON ai_agents FOR SELECT TO anon USING (false);
+CREATE POLICY deny_anon_select ON campaign_folders FOR SELECT TO anon USING (false);
+CREATE POLICY deny_anon_select ON campaign_tag_assignments FOR SELECT TO anon USING (false);
+CREATE POLICY deny_anon_select ON campaign_tags FOR SELECT TO anon USING (false);
+CREATE POLICY deny_anon_select ON template_project_items FOR SELECT TO anon USING (false);
+CREATE POLICY deny_anon_select ON template_projects FOR SELECT TO anon USING (false);
+CREATE POLICY deny_anon_select ON flow_submissions FOR SELECT TO anon USING (false);
