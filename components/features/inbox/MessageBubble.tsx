@@ -12,7 +12,7 @@
  */
 
 import React, { memo, useMemo } from 'react'
-import { Check, CheckCheck, Clock, AlertCircle, Sparkles, ArrowRightLeft, FileText, Link, Phone, MessageSquare, Copy, FileEdit } from 'lucide-react'
+import { Check, CheckCheck, Clock, AlertCircle, Sparkles, ArrowRightLeft } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatTime } from '@/lib/date-utils'
 import {
@@ -213,84 +213,92 @@ function SentimentIndicator({ sentiment }: { sentiment: Sentiment }) {
 
 // ========== Template Message Renderer ==========
 
+/**
+ * Renderiza mensagem de template com visual similar ao WhatsApp Web.
+ *
+ * Design:
+ * - Barra verde lateral como indicador de template
+ * - Header em negrito
+ * - Body preserva whitespace e formatação WhatsApp
+ * - Footer separado por linha, texto menor
+ * - Botões como cards escuros com título e URL
+ */
 function TemplateMessageContent({ parsed, time, deliveryStatus }: {
   parsed: ParsedTemplateMessage
   time: string
   deliveryStatus?: DeliveryStatus
 }) {
-  const buttonIcon = (type: ParsedTemplateMessage['buttons'][0]['type']) => {
-    switch (type) {
-      case 'url': return <Link className="h-3 w-3" />
-      case 'phone': return <Phone className="h-3 w-3" />
-      case 'quick_reply': return <MessageSquare className="h-3 w-3" />
-      case 'copy_code': return <Copy className="h-3 w-3" />
-      case 'flow': return <FileEdit className="h-3 w-3" />
-      default: return null
-    }
-  }
-
   return (
-    <div className="flex flex-col w-full">
-      {/* Template Header Badge */}
-      <div className="flex items-center gap-2 mb-2 pb-2 border-b border-emerald-500/30">
-        <FileText className="h-3.5 w-3.5 text-emerald-300/80" />
-        <span className="text-xs font-medium text-emerald-200/90">
-          Template: {parsed.templateName}
-        </span>
-      </div>
+    <div className="flex w-full">
+      {/* Barra lateral verde - indicador de template */}
+      <div className="w-1 bg-emerald-500 rounded-full mr-3 flex-shrink-0" />
 
-      {/* Header (se existir) */}
-      {parsed.header && (
-        <div className="mb-2">
-          {parsed.header.type === 'text' ? (
-            <p className="text-base font-semibold text-white leading-snug">
-              <WhatsAppFormattedText text={parsed.header.content} />
+      <div className="flex flex-col flex-1 min-w-0">
+        {/* Header (título do template em negrito) */}
+        {parsed.header && parsed.header.type === 'text' && (
+          <p className="text-base font-bold text-white mb-3">
+            {parsed.header.content}
+          </p>
+        )}
+
+        {/* Header de mídia */}
+        {parsed.header && parsed.header.type !== 'text' && (
+          <div className="flex items-center gap-2 text-zinc-300 text-sm mb-3 bg-zinc-800/50 rounded px-2 py-1.5">
+            {parsed.header.type === 'image' && <span>🖼️</span>}
+            {parsed.header.type === 'video' && <span>🎬</span>}
+            {parsed.header.type === 'document' && <span>📄</span>}
+            {parsed.header.type === 'location' && <span>📍</span>}
+            <span>{parsed.header.content}</span>
+          </div>
+        )}
+
+        {/* Body - preserva whitespace e formatação WhatsApp */}
+        {parsed.body && (
+          <div className="text-base text-zinc-200 whitespace-pre-wrap break-words leading-relaxed">
+            <WhatsAppFormattedText text={parsed.body} />
+          </div>
+        )}
+
+        {/* Footer - separado por linha visível, texto mais sutil */}
+        {parsed.footer && (
+          <div className="mt-5 pt-4 border-t border-zinc-600/60">
+            <p className="text-sm text-zinc-500">
+              {parsed.footer}
             </p>
-          ) : (
-            <div className="flex items-center gap-2 text-emerald-200/80 text-sm">
-              {parsed.header.type === 'image' && <span>🖼️</span>}
-              {parsed.header.type === 'video' && <span>🎬</span>}
-              {parsed.header.type === 'document' && <span>📄</span>}
-              {parsed.header.type === 'location' && <span>📍</span>}
-              <span>{parsed.header.content}</span>
-            </div>
-          )}
+          </div>
+        )}
+
+        {/* Botões - cards escuros minimalistas */}
+        {parsed.buttons.length > 0 && (
+          <div className="mt-4 space-y-2">
+            {parsed.buttons.map((btn, idx) => (
+              <div
+                key={idx}
+                className="flex items-center justify-between bg-zinc-800/90 rounded-xl px-4 py-3"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-zinc-300">{btn.text}</span>
+                </div>
+                {(btn.type === 'url' || btn.type === 'flow') && (
+                  <svg
+                    className="h-4 w-4 text-blue-400 flex-shrink-0"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 17L17 7M17 7H7M17 7V17" />
+                  </svg>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Time & Status */}
+        <div className="flex items-center justify-end gap-1.5 mt-3">
+          <span className="text-[10px] text-zinc-500">{time}</span>
+          {deliveryStatus && <DeliveryStatusIcon status={deliveryStatus} />}
         </div>
-      )}
-
-      {/* Body */}
-      {parsed.body && (
-        <p className="text-base leading-relaxed whitespace-pre-wrap break-words text-white/95">
-          <WhatsAppFormattedText text={parsed.body} />
-        </p>
-      )}
-
-      {/* Footer */}
-      {parsed.footer && (
-        <p className="mt-2 text-sm italic text-emerald-200/70">
-          {parsed.footer}
-        </p>
-      )}
-
-      {/* Buttons */}
-      {parsed.buttons.length > 0 && (
-        <div className="mt-3 pt-2 border-t border-emerald-500/30 space-y-1.5">
-          {parsed.buttons.map((btn, idx) => (
-            <div
-              key={idx}
-              className="flex items-center gap-2 text-sm text-emerald-100/90 bg-emerald-600/40 rounded-lg px-3 py-1.5"
-            >
-              {buttonIcon(btn.type)}
-              <span>{btn.text}</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Time & Status */}
-      <div className="flex items-center justify-end gap-1.5 mt-2">
-        <span className="text-[10px] text-emerald-200/60">{time}</span>
-        {deliveryStatus && <DeliveryStatusIcon status={deliveryStatus} />}
       </div>
     </div>
   )
@@ -421,7 +429,7 @@ export const MessageBubble = memo(function MessageBubble({
             // Inbound (cliente): themed surface color
             isInbound && 'bg-[var(--ds-bg-surface)]/80 text-[var(--ds-text-primary)]',
             // Template message: fundo verde escuro especial
-            isTemplate && 'bg-emerald-800/90 text-white',
+            isTemplate && 'bg-zinc-900/95 text-white',
             // Outbound humano (não template): verde desaturado, elegante
             !isInbound && !isAIResponse && !isTemplate && 'bg-emerald-600/80 text-white',
             // AI Response (não template): verde mais escuro para diferenciar
