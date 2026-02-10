@@ -18,9 +18,9 @@ function getSupabasePublishableKey(): string | undefined {
 }
 
 function getSupabaseServiceRoleKey(): string | undefined {
-    // Canonical neste projeto: SUPABASE_SECRET_KEY
-    // Compat: muitos setups usam SUPABASE_SERVICE_ROLE_KEY
-    return process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
+    // Vercel integration uses SUPABASE_SERVICE_ROLE_KEY
+    // Compat: SUPABASE_SECRET_KEY for legacy setups
+    return process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY
 }
 
 // ============================================================================
@@ -45,7 +45,8 @@ let _supabaseAdmin: SupabaseClient | null = null
  * @returns Client Supabase admin, ou `null` se não configurado.
  */
 export function getSupabaseAdmin(): SupabaseClient | null {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    // Vercel integration provides both SUPABASE_URL and NEXT_PUBLIC_SUPABASE_URL
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
     const key = getSupabaseServiceRoleKey()
 
     // Silencia warnings durante build (SSG) - env vars não disponíveis é esperado
