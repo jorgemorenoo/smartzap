@@ -137,34 +137,31 @@ async function setStoredSessions(sessions: StoredSession[]): Promise<void> {
 }
 
 /**
- * Check if setup is completed (company exists)
+ * Check if setup is completed
+ * Without wizard, setup is considered complete if MASTER_PASSWORD exists
  */
 export async function isSetupComplete(): Promise<boolean> {
-  // Em produção, usamos a env var para evitar consultas e loops.
+  // With new flow (no wizard), we consider setup complete if MASTER_PASSWORD is configured
+  if (process.env.MASTER_PASSWORD) return true
+
+  // Legacy support: check SETUP_COMPLETE env var
   if (process.env.SETUP_COMPLETE === 'true') return true
 
-  // Em dev/local, o fluxo pode rodar sem Vercel.
-  // Então consideramos "setup completo" se a empresa já foi gravada no banco.
-  if (process.env.NODE_ENV !== 'production') {
-    try {
-      const { data, error } = await supabase
-        .from('settings')
-        .select('key, value')
-        .eq('key', 'company_name')
-        .single()
+  // Legacy support: check if company was created in database
+  try {
+    const { data, error } = await supabase
+      .from('settings')
+      .select('key, value')
+      .eq('key', 'company_name')
+      .single()
 
-      if (error) {
-        // Ajuda a diagnosticar "isSetup:false" causado por permissão negada.
-        console.warn('[isSetupComplete] settings/company_name query error:', error.message)
-        return false
-      }
-      return !!data?.value
-    } catch {
+    if (error) {
       return false
     }
+    return !!data?.value
+  } catch {
+    return false
   }
-
-  return false
 }
 
 /**
