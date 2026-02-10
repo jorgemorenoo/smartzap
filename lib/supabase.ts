@@ -1,145 +1,55 @@
-/**
- * Supabase Client
- * 
- * PostgreSQL database with connection pooling and RLS
- * Banco principal do SmartZap (PostgreSQL + RLS)
- */
-
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 
-function getSupabasePublishableKey(): string | undefined {
-    return (
-        process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-        process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY ||
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    )
-}
+let _adminClient: SupabaseClient | null = null
 
 function getSupabaseServiceRoleKey(): string | undefined {
-    return process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY
+  return process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY
 }
 
-// Server-side client with service role (full access, bypasses RLS)
-let _supabaseAdmin: SupabaseClient | null = null
-
-/**
- * Returns a Supabase server-side client with Service Role (bypasses RLS).
- * Returns null when environment variables are not configured.
- */
 export function getSupabaseAdmin(): SupabaseClient | null {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
-    const key = getSupabaseServiceRoleKey()
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
+  const key = getSupabaseServiceRoleKey()
 
-    if (!url || !key) {
-        return null
-    }
+  if (!url || !key) {
+    console.warn('[getSupabaseAdmin] Missing config:', { hasUrl: !!url, hasKey: !!key })
+    return null
+  }
 
-    if (!_supabaseAdmin) {
-        _supabaseAdmin = createClient(url, key, {
-            auth: {
-                autoRefreshToken: false,
-                persistSession: false
-            }
-        })
-    }
-    return _supabaseAdmin
+  if (!_adminClient) {
+    _adminClient = createClient(url, key, {
+      auth: { autoRefreshToken: false, persistSession: false }
+    })
+  }
+  return _adminClient
 }
 
-// Client-side client with anon key (respects RLS)
-let _supabaseBrowser: SupabaseClient | null = null
+// Mock responses when Supabase not configured
+const mockError = { code: 'SUPABASE_NOT_CONFIGURED', message: 'Supabase not configured' }
+const mockResponse = { data: null, error: mockError }
 
-/**
- * Returns a Supabase browser client (respects RLS).
- * Returns null when not configured.
- */
-export function getSupabaseBrowser(): SupabaseClient | null {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const key = getSupabasePublishableKey()
-
-    if (!url || !key) {
-        return null
-    }
-
-    if (!_supabaseBrowser) {
-        _supabaseBrowser = createClient(url, key)
-    }
-    return _supabaseBrowser
-}
-
-/**
- * Supabase facade - backwards compatible export
- */
 export const supabase = {
-    get admin() {
-        return getSupabaseAdmin()
-    },
-    get browser() {
-        return getSupabaseBrowser()
-    },
-    from: (table: string) => {
-        const client = getSupabaseAdmin()
-        if (!client) {
-            console.warn('[supabase] Client not available, returning mock')
-            return {
-                select: () => Promise.resolve({ data: null, error: { code: 'SUPABASE_NOT_CONFIGURED', message: 'Supabase not configured' } }),
-                insert: () => Promise.resolve({ data: null, error: { code: 'SUPABASE_NOT_CONFIGURED', message: 'Supabase not configured' } }),
-                update: () => Promise.resolve({ data: null, error: { code: 'SUPABASE_NOT_CONFIGURED', message: 'Supabase not configured' } }),
-                delete: () => Promise.resolve({ data: null, error: { code: 'SUPABASE_NOT_CONFIGURED', message: 'Supabase not configured' } }),
-                upsert: () => Promise.resolve({ data: null, error: { code: 'SUPABASE_NOT_CONFIGURED', message: 'Supabase not configured' } }),
-                eq: () => ({}),
-                single: () => Promise.resolve({ data: null, error: { code: 'SUPABASE_NOT_CONFIGURED', message: 'Supabase not configured' } }),
-            } as any
-        }
-        return client.from(table)
-    },
-    rpc: (fn: string, params?: object) => {
-        const client = getSupabaseAdmin()
-        if (!client) {
-            console.warn('[supabase] Client not available, returning mock rpc')
-            return Promise.resolve({ data: null, error: { code: 'SUPABASE_NOT_CONFIGURED', message: 'Supabase not configured' } }) as any
-        }
-        return client.rpc(fn, params)
-    },
-}
-
-/**
- * Check Supabase connectivity
- */
-export async function checkSupabaseConnection(): Promise<{
-    connected: boolean
-    latency?: number
-    error?: string
-}> {
-    try {
-        const client = getSupabaseAdmin()
-        if (!client) {
-            return { connected: false, error: 'Supabase not configured' }
-        }
-        const start = Date.now()
-        const { error } = await client
-            .from('campaigns')
-            .select('count')
-            .limit(1)
-
-        if (error && !error.message.includes('relation "campaigns" does not exist')) {
-            return { connected: false, error: error.message }
-        }
-
-        return { connected: true, latency: Date.now() - start }
-    } catch (err) {
-        return {
-            connected: false,
-            error: err instanceof Error ? err.message : 'Unknown error'
-        }
+  from: (table: string) => {
+    const client = getSupabaseAdmin()
+    if (!client) {
+      console.warn('[supabase.from] Not configured, returning mock')
+      return {
+        select: () => Promise.resolve(mockResponse),
+        insert: () => Promise.resolve(mockResponse),
+        update: () => Promise.resolve(mockResponse),
+        delete: () => Promise.resolve(mockResponse),
+        upsert: () => Promise.resolve(mockResponse),
+        eq: () => ({ single: () => Promise.resolve(mockResponse) }),
+        single: () => Promise.resolve(mockResponse),
+      } as any
     }
-}
-
-/**
- * Check if Supabase is configured
- */
-export function isSupabaseConfigured(): boolean {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const publishableKey = getSupabasePublishableKey()
-    const secretKey = getSupabaseServiceRoleKey()
-    return !!(url && publishableKey && secretKey)
+    return client.from(table)
+  },
+  rpc: (fn: string, params?: object) => {
+    const client = getSupabaseAdmin()
+    if (!client) {
+      console.warn('[supabase.rpc] Not configured, returning mock')
+      return Promise.resolve(mockResponse) as any
+    }
+    return client.rpc(fn, params)
+  },
 }
