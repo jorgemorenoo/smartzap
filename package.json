@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "predev": "echo 'Starting development server...'",
-    "dev": "TURBOPACK=0 next dev",
-    "dev:ai": "AI_DEVTOOLS=1 TURBOPACK=0 next dev",
+    "dev": "next dev --no-turbo",
+    "dev:ai": "AI_DEVTOOLS=1 next dev --no-turbo",
     "ai:devtools": "npx @ai-sdk/devtools",
     "dev:tunnel": "node scripts/dev-with-tunnel.mjs",
     "dev:tunnel:ai": "AI_DEVTOOLS=1 node scripts/dev-with-tunnel.mjs",

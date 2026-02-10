@@ -42,6 +42,8 @@ const nextConfig: NextConfig = {
   // This automatically transforms imports like `import { X } from 'lucide-react'`
   // to direct module imports, reducing bundle size significantly
   experimental: {
+    // Disable turbopack explicitly
+    turbo: undefined,
     optimizePackageImports: ['lucide-react', '@radix-ui/react-icons'],
     // Aumentar limite de body para uploads de mídia (vídeos até 16MB)
     serverActions: {
