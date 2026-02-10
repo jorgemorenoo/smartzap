@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { loginUser, isSetupComplete } from '@/lib/user-auth'
+import { verifyPassword, createSession } from '@/lib/simple-auth'
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,33 +20,35 @@ export async function POST(request: NextRequest) {
     }
     
     // Check if MASTER_PASSWORD is configured
-    const masterPassword = process.env.MASTER_PASSWORD
-    
-    if (!masterPassword) {
-      console.error('[LOGIN] MASTER_PASSWORD não configurado nas variáveis de ambiente')
+    if (!process.env.MASTER_PASSWORD) {
+      console.error('[LOGIN] MASTER_PASSWORD não configurado')
       return NextResponse.json(
         { 
-          error: 'Sistema não configurado. Configure a variável MASTER_PASSWORD nas variáveis de ambiente da Vercel.',
+          error: 'Sistema não configurado. Configure MASTER_PASSWORD nas variáveis de ambiente.',
           needsConfiguration: true
         },
         { status: 503 }
       )
     }
     
-    const result = await loginUser(password)
+    // Verify password using simple auth (no database required)
+    const isValid = await verifyPassword(password)
     
-    if (!result.success) {
-      console.log('[LOGIN] Falha na autenticação:', result.error)
+    if (!isValid) {
+      console.log('[LOGIN] Senha incorreta')
       return NextResponse.json(
-        { error: result.error },
+        { error: 'Senha incorreta' },
         { status: 401 }
       )
     }
     
+    // Create session
+    await createSession()
+    
     console.log('[LOGIN] Login bem-sucedido')
     return NextResponse.json({
       success: true,
-      company: result.company
+      company: { name: 'SmartZap' }
     })
     
   } catch (error) {
