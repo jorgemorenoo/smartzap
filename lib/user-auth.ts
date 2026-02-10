@@ -68,7 +68,11 @@ async function upsertSetting(key: string, value: string): Promise<void> {
     .upsert({ key, value, updated_at: now }, { onConflict: 'key' })
 
   if (error) {
-    // Não silencie erros de permissão/RLS — isso causa loops e estados falsos.
+    // If Supabase not configured, silently skip
+    if (error.code === 'SUPABASE_NOT_CONFIGURED') {
+      console.warn('[upsertSetting] Skipping - Supabase not configured')
+      return
+    }
     throw new Error(`Falha ao salvar setting "${key}": ${error.message}`)
   }
 }
@@ -83,6 +87,10 @@ async function getSetting(key: string): Promise<{ value: string; updated_at: str
     .eq('key', key)
     .single()
 
+  // If Supabase not configured, return null
+  if (error?.code === 'SUPABASE_NOT_CONFIGURED') {
+    return null
+  }
   if (error || !data) return null
   return data
 }
@@ -93,6 +101,11 @@ async function getSetting(key: string): Promise<{ value: string; updated_at: str
 async function deleteSetting(key: string): Promise<void> {
   const { error } = await supabase.from('settings').delete().eq('key', key)
   if (error) {
+    // If Supabase not configured, silently skip
+    if (error.code === 'SUPABASE_NOT_CONFIGURED') {
+      console.warn('[deleteSetting] Skipping - Supabase not configured')
+      return
+    }
     throw new Error(`Falha ao remover setting "${key}": ${error.message}`)
   }
 }
