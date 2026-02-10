@@ -62,14 +62,23 @@ export interface UserAuthResult {
  * Upsert a setting in the database
  */
 async function upsertSetting(key: string, value: string): Promise<void> {
-  const now = new Date().toISOString()
-  const { error } = await supabase
-    .from('settings')
-    .upsert({ key, value, updated_at: now }, { onConflict: 'key' })
+  try {
+    const now = new Date().toISOString()
+    const { error } = await supabase
+      .from('settings')
+      .upsert({ key, value, updated_at: now }, { onConflict: 'key' })
 
-  if (error) {
-    // Não silencie erros de permissão/RLS — isso causa loops e estados falsos.
-    throw new Error(`Falha ao salvar setting "${key}": ${error.message}`)
+    if (error) {
+      // Não silencie erros de permissão/RLS — isso causa loops e estados falsos.
+      throw new Error(`Falha ao salvar setting "${key}": ${error.message}`)
+    }
+  } catch (error) {
+    // If Supabase is not configured, fail gracefully
+    if (error instanceof Error && error.message.includes('Supabase not configured')) {
+      console.warn('[upsertSetting] Supabase não configurado, operação ignorada')
+      return
+    }
+    throw error
   }
 }
 
@@ -77,23 +86,40 @@ async function upsertSetting(key: string, value: string): Promise<void> {
  * Get a setting from the database
  */
 async function getSetting(key: string): Promise<{ value: string; updated_at: string } | null> {
-  const { data, error } = await supabase
-    .from('settings')
-    .select('value, updated_at')
-    .eq('key', key)
-    .single()
+  try {
+    const { data, error } = await supabase
+      .from('settings')
+      .select('value, updated_at')
+      .eq('key', key)
+      .single()
 
-  if (error || !data) return null
-  return data
+    if (error || !data) return null
+    return data
+  } catch (error) {
+    // If Supabase is not configured, return null
+    if (error instanceof Error && error.message.includes('Supabase not configured')) {
+      return null
+    }
+    return null
+  }
 }
 
 /**
  * Delete a setting from the database
  */
 async function deleteSetting(key: string): Promise<void> {
-  const { error } = await supabase.from('settings').delete().eq('key', key)
-  if (error) {
-    throw new Error(`Falha ao remover setting "${key}": ${error.message}`)
+  try {
+    const { error } = await supabase.from('settings').delete().eq('key', key)
+    if (error) {
+      throw new Error(`Falha ao remover setting "${key}": ${error.message}`)
+    }
+  } catch (error) {
+    // If Supabase is not configured, fail gracefully
+    if (error instanceof Error && error.message.includes('Supabase not configured')) {
+      console.warn('[deleteSetting] Supabase não configurado, operação ignorada')
+      return
+    }
+    throw error
   }
 }
 
