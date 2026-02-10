@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "predev": "echo 'Starting development server...'",
     "dev": "next dev",
     "dev:ai": "AI_DEVTOOLS=1 next dev",
     "ai:devtools": "npx @ai-sdk/devtools",
