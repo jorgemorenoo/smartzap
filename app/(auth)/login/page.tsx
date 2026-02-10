@@ -23,17 +23,13 @@ function LoginForm() {
   const [isConfigured, setIsConfigured] = useState(true)
 
   useEffect(() => {
-
     // Get company name from auth status
     fetch('/api/auth/status')
-      .then(res => {
-        return res.json()
-      })
-      .then(async (data) => {
+      .then(res => res.json())
+      .then((data) => {
         if (!data.isConfigured) {
           setIsConfigured(false)
           setError('Defina MASTER_PASSWORD nas variáveis de ambiente para habilitar o login.')
-          return
         } else if (data.isAuthenticated) {
           router.push('/')
         } else if (data.company) {
@@ -41,7 +37,7 @@ function LoginForm() {
         }
       })
       .catch((err) => {
-        console.error('🔍 [LOGIN] Auth status error:', err)
+        console.error('[LOGIN] Auth status error:', err)
       })
   }, [router])
 

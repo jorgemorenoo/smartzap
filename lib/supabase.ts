@@ -49,13 +49,35 @@ export function getSupabaseAdmin(): SupabaseClient | null {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
     const key = getSupabaseServiceRoleKey()
 
-    // Silencia warnings durante build (SSG) - env vars não disponíveis é esperado
-    const isBuildTime = typeof window === 'undefined' && !process.env.VERCEL_ENV
+    console.log('[getSupabaseAdmin] Checking config:', {
+        hasUrl: !!url,
+        hasKey: !!key,
+        urlValue: url ? `${url.substring(0, 30)}...` : 'none',
+        keyValue: key ? `${key.substring(0, 20)}...` : 'none',
+        envKeys: Object.keys(process.env).filter(k => k.includes('SUPABASE'))
+    })
 
-    if (!key) {
-        if (!isBuildTime) {
-            console.warn('[getSupabaseAdmin] Supabase service role key is missing (SUPABASE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY)')
-        }
+    if (!url || !key) {
+        console.error('[getSupabaseAdmin] Missing Supabase configuration. Checked:', {
+            NEXT_PUBLIC_SUPABASE_URL: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+            SUPABASE_URL: !!process.env.SUPABASE_URL,
+            SUPABASE_SERVICE_ROLE_KEY: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+            SUPABASE_SECRET_KEY: !!process.env.SUPABASE_SECRET_KEY
+        })
+        return null
+    }
+
+    if (!_adminClient) {
+        _adminClient = createClient(url, key, {
+            auth: {
+                autoRefreshToken: false,
+                persistSession: false
+            }
+        })
+        console.log('[getSupabaseAdmin] Admin client created successfully')
+    }
+    return _adminClient
+}
         return null;
     }
     if (!url) {
