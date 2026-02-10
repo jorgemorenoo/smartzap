@@ -30,14 +30,14 @@ export async function GET() {
     const isConfigured = !!process.env.MASTER_PASSWORD
 
     if (!isConfigured) {
-      log('🔍 [AUTH-STATUS] Not configured, returning early')
+      log('🔍 [AUTH-STATUS] Not configured - MASTER_PASSWORD missing')
       return NextResponse.json({
         isConfigured: false,
-        debug_master_password_exists: !!process.env.MASTER_PASSWORD,
-        debug_vercel_token_exists: !!process.env.VERCEL_TOKEN,
+        needsSetup: true,
         isSetup: false,
         isAuthenticated: false,
-        company: null
+        company: null,
+        message: 'Configure MASTER_PASSWORD in environment variables to enable login'
       })
     }
 

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { IntegrationsPanel } from './IntegrationsPanel';
 import { TestContactPanel } from './TestContactPanel';
 import { AutoSuppressionPanel } from './AutoSuppressionPanel';
 import { WorkflowExecutionPanel } from './WorkflowExecutionPanel';
@@ -128,6 +129,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       )}
 
       <div className="space-y-8">
+        {/* Integrations Panel - Shows status of essential services */}
+        <IntegrationsPanel />
+
         {/* Status Card */}
         <StatusCard
           ref={statusCardRef}
