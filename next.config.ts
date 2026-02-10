@@ -28,8 +28,7 @@ const securityHeaders = [
 ] satisfies Array<{ key: string; value: string }>
 
 const nextConfig: NextConfig = {
-  // Turbopack disabled via TURBOPACK=0 env var in package.json scripts
-  // Using Webpack bundler for stability in sandbox environment
+  // Using Next.js 15.1 (stable, no Turbopack by default)
   reactStrictMode: true,
 
   // Hide framework fingerprinting header
@@ -42,8 +41,6 @@ const nextConfig: NextConfig = {
   // This automatically transforms imports like `import { X } from 'lucide-react'`
   // to direct module imports, reducing bundle size significantly
   experimental: {
-    // Disable turbopack explicitly
-    turbo: undefined,
     optimizePackageImports: ['lucide-react', '@radix-ui/react-icons'],
     // Aumentar limite de body para uploads de mídia (vídeos até 16MB)
     serverActions: {
@@ -63,9 +60,6 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_APP_NAME: 'SmartZap',
     NEXT_PUBLIC_APP_VERSION: process.env.VERCEL_GIT_COMMIT_SHA?.substring(0, 7) || '1.0.0',
   },
-
-  // React Compiler for automatic memoization (moved from experimental in Next.js 16)
-  reactCompiler: true,
 
   async headers() {
     return [
