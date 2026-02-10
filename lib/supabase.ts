@@ -11,9 +11,46 @@ export function getSupabaseAdmin(): SupabaseClient | null {
   const key = getSupabaseServiceRoleKey()
 
   if (!url || !key) {
-    console.warn('[getSupabaseAdmin] Missing config:', { hasUrl: !!url, hasKey: !!key })
+    console.warn('[getSupabaseAdmin] Missing Supabase configuration')
     return null
   }
+
+  if (!_adminClient) {
+    _adminClient = createClient(url, key, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    })
+  }
+  return _adminClient
+}
+
+let _browserClient: SupabaseClient | null = null
+
+export function getSupabaseBrowser(): SupabaseClient | null {
+  if (typeof window === 'undefined') {
+    return null
+  }
+
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (!url || !key) {
+    console.warn('[getSupabaseBrowser] Missing Supabase configuration')
+    return null
+  }
+
+  if (!_browserClient) {
+    _browserClient = createClient(url, key, {
+      auth: {
+        autoRefreshToken: true,
+        persistSession: true
+      }
+    })
+  }
+  return _browserClient
+}
 
   if (!_adminClient) {
     _adminClient = createClient(url, key, {
