@@ -79,17 +79,15 @@ export const supabase = {
     from: (table: string) => {
         const client = getSupabaseAdmin()
         if (!client) {
-            // Return a mock that returns errors instead of throwing
-            const mockError = { message: 'Supabase not configured', code: 'SUPABASE_NOT_CONFIGURED' }
+            console.warn('[supabase] Client not available, returning mock')
             return {
-                select: () => Promise.resolve({ data: null, error: mockError }),
-                insert: () => Promise.resolve({ data: null, error: mockError }),
-                update: () => Promise.resolve({ data: null, error: mockError }),
-                delete: () => Promise.resolve({ data: null, error: mockError }),
-                upsert: () => Promise.resolve({ data: null, error: mockError }),
-                eq: function() { return this },
-                single: function() { return this },
-                limit: function() { return this },
+                select: () => Promise.resolve({ data: null, error: { code: 'SUPABASE_NOT_CONFIGURED', message: 'Supabase not configured' } }),
+                insert: () => Promise.resolve({ data: null, error: { code: 'SUPABASE_NOT_CONFIGURED', message: 'Supabase not configured' } }),
+                update: () => Promise.resolve({ data: null, error: { code: 'SUPABASE_NOT_CONFIGURED', message: 'Supabase not configured' } }),
+                delete: () => Promise.resolve({ data: null, error: { code: 'SUPABASE_NOT_CONFIGURED', message: 'Supabase not configured' } }),
+                upsert: () => Promise.resolve({ data: null, error: { code: 'SUPABASE_NOT_CONFIGURED', message: 'Supabase not configured' } }),
+                eq: () => ({}),
+                single: () => Promise.resolve({ data: null, error: { code: 'SUPABASE_NOT_CONFIGURED', message: 'Supabase not configured' } }),
             } as any
         }
         return client.from(table)
@@ -97,10 +95,8 @@ export const supabase = {
     rpc: (fn: string, params?: object) => {
         const client = getSupabaseAdmin()
         if (!client) {
-            return Promise.resolve({ 
-                data: null, 
-                error: { message: 'Supabase not configured', code: 'SUPABASE_NOT_CONFIGURED' } 
-            })
+            console.warn('[supabase] Client not available, returning mock rpc')
+            return Promise.resolve({ data: null, error: { code: 'SUPABASE_NOT_CONFIGURED', message: 'Supabase not configured' } }) as any
         }
         return client.rpc(fn, params)
     },
