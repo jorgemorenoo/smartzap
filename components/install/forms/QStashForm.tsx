@@ -26,8 +26,16 @@ export function QStashForm({ data, onComplete, onBack, showBack }: FormProps) {
   const canValidate = isValidFormat && token.trim().length >= VALIDATION.QSTASH_TOKEN_MIN_LENGTH;
 
   const handleValidate = async () => {
+    console.log('[v0] QStash validation started', {
+      tokenLength: token.length,
+      tokenPrefix: token.substring(0, 10) + '...',
+      isValidFormat,
+    });
+
     if (!canValidate) {
-      setError('Token deve começar com eyJ ou qstash_');
+      const errorMsg = 'Token deve começar com eyJ ou qstash_';
+      console.log('[v0] QStash validation failed - invalid format', { errorMsg });
+      setError(errorMsg);
       return;
     }
 
@@ -39,6 +47,8 @@ export function QStashForm({ data, onComplete, onBack, showBack }: FormProps) {
     const startTime = Date.now();
 
     try {
+      console.log('[v0] QStash API validation request starting');
+      
       const res = await fetch('/api/installer/qstash/validate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -46,6 +56,12 @@ export function QStashForm({ data, onComplete, onBack, showBack }: FormProps) {
       });
 
       const result = await res.json();
+      
+      console.log('[v0] QStash API validation response', {
+        status: res.status,
+        ok: res.ok,
+        result,
+      });
 
       if (!res.ok || result.error) {
         throw new Error(result.error || 'Credenciais inválidas');
@@ -57,14 +73,19 @@ export function QStashForm({ data, onComplete, onBack, showBack }: FormProps) {
         await new Promise(r => setTimeout(r, MIN_VALIDATION_TIME - elapsed));
       }
 
+      console.log('[v0] QStash validation successful');
       setSuccess(true);
     } catch (err) {
       const elapsed = Date.now() - startTime;
       if (elapsed < MIN_VALIDATION_TIME) {
         await new Promise(r => setTimeout(r, MIN_VALIDATION_TIME - elapsed));
       }
-      setError(err instanceof Error ? err.message : 'Falha na conexão');
-      setToken('');
+      
+      const errorMsg = err instanceof Error ? err.message : 'Falha na conexão';
+      console.log('[v0] QStash validation failed', { error: errorMsg, err });
+      
+      // NÃO limpar o token - permitir que usuário corrija
+      setError(errorMsg);
     } finally {
       setValidating(false);
     }

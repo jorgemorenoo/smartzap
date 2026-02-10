@@ -31,6 +31,7 @@ export function StepDots({
           <motion.div
             key={i}
             className="relative"
+            initial={false}
             animate={{ scale: isActive ? 1.3 : 1 }}
             transition={{
               type: 'spring',

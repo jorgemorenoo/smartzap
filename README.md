@@ -24,7 +24,7 @@
 
 ### Por que escolher SmartZap?
 
-- **Instalação em minutos**: Deploy na Vercel + wizard que configura tudo
+- **Instalação simplificada**: Deploy na Vercel, configure MASTER_PASSWORD e pronto
 - **Campanhas em massa**: Dispare mensagens para milhares de contatos com templates aprovados
 - **Inbox em tempo real**: Converse com clientes direto do navegador
 - **Agentes de IA**: Deixe a IA responder automaticamente com contexto personalizado
@@ -79,9 +79,9 @@
 
 ## Instalação Rápida
 
-> **Tempo estimado**: 15-20 minutos
+> **Tempo estimado**: 10-15 minutos
 >
-> **Método recomendado**: Fork → Vercel → Wizard
+> **Método recomendado**: Fork → Vercel → Configure variáveis → Login
 
 Este guia vai te levar do zero até ter o SmartZap funcionando.
 
@@ -89,14 +89,16 @@ Este guia vai te levar do zero até ter o SmartZap funcionando.
 
 1. Fazer fork do repositório no GitHub
 2. Fazer deploy na Vercel
-3. Rodar o wizard de instalação
-4. Começar a usar!
+3. Configurar MASTER_PASSWORD nas variáveis de ambiente
+4. Fazer login e configurar serviços em Settings
+5. Começar a usar!
 
 ```mermaid
 flowchart LR
     A[Fork no GitHub] --> B[Deploy na Vercel]
-    B --> C[Abrir /install]
-    C --> D[Wizard configura tudo]
+    B --> C[Configurar MASTER_PASSWORD]
+    C --> D[Login no sistema]
+    D --> E[Configurar integrações]
     D --> E[Pronto!]
 ```
 

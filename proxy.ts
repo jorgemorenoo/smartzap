@@ -99,11 +99,13 @@ export async function proxy(request: NextRequest) {
         }
     }
 
-    // If not configured and not already on install, redirect immediately
+    // If not configured, redirect to login (not install)
+    // User will configure services after logging in via Settings
     if (!hasMasterPassword) {
-        if (!pathname.startsWith('/install') && !pathname.startsWith('/api')) {
-            const installUrl = new URL('/install', request.url)
-            return NextResponse.redirect(installUrl)
+        if (!pathname.startsWith('/login') && !pathname.startsWith('/api')) {
+            const loginUrl = new URL('/login', request.url)
+            loginUrl.searchParams.set('reason', 'not_configured')
+            return NextResponse.redirect(loginUrl)
         }
     }
 

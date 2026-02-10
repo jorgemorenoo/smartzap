@@ -20,16 +20,9 @@ function LoginForm() {
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [companyName, setCompanyName] = useState('')
-  const [isLocalhost, setIsLocalhost] = useState(false)
   const [isConfigured, setIsConfigured] = useState(true)
 
   useEffect(() => {
-    try {
-      const host = window.location.hostname
-      setIsLocalhost(host === 'localhost' || host === '127.0.0.1' || host === '::1')
-    } catch {
-      setIsLocalhost(false)
-    }
 
     // Get company name from auth status
     fetch('/api/auth/status')
@@ -39,17 +32,8 @@ function LoginForm() {
       .then(async (data) => {
         if (!data.isConfigured) {
           setIsConfigured(false)
-
-          // Em localhost, não forçamos o fluxo da Vercel. Mostramos instrução para configurar .env.local.
-          if (isLocalhost) {
-            setError('Configuração local incompleta: defina MASTER_PASSWORD no .env.local e reinicie o servidor (npm run dev).')
-            return
-          }
-
-          router.push('/install')
-        } else if (!data.isSetup) {
-          // Instalação incompleta - redireciona para o wizard
-          router.push('/install/wizard')
+          setError('Defina MASTER_PASSWORD nas variáveis de ambiente para habilitar o login.')
+          return
         } else if (data.isAuthenticated) {
           router.push('/')
         } else if (data.company) {
@@ -59,7 +43,7 @@ function LoginForm() {
       .catch((err) => {
         console.error('🔍 [LOGIN] Auth status error:', err)
       })
-  }, [router, isLocalhost])
+  }, [router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -109,17 +93,23 @@ function LoginForm() {
         <p className="text-[var(--ds-text-secondary)] mt-1">Entre para continuar</p>
       </div>
 
+      {/* Configuration Warning */}
+      {!isConfigured && (
+        <div className="mb-6 bg-amber-500/10 border border-amber-500/20 rounded-xl p-5">
+          <h3 className="text-sm font-semibold text-amber-600 dark:text-amber-400 mb-2">
+            Configuração Necessária
+          </h3>
+          <p className="text-sm text-[var(--ds-text-secondary)] mb-3">
+            Para acessar o sistema, configure a variável de ambiente <code className="px-2 py-0.5 rounded bg-[var(--ds-bg-surface)] text-[var(--ds-text-primary)] font-mono text-xs">MASTER_PASSWORD</code> no painel da Vercel ou no arquivo <code className="px-2 py-0.5 rounded bg-[var(--ds-bg-surface)] text-[var(--ds-text-primary)] font-mono text-xs">.env.local</code>.
+          </p>
+          <p className="text-xs text-[var(--ds-text-muted)]">
+            Após configurar, reinicie o servidor de desenvolvimento ou faça redeploy na produção.
+          </p>
+        </div>
+      )}
+
       {/* Card */}
       <div className="bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-2xl p-6 shadow-xl">
-        {!isConfigured && isLocalhost && (
-          <div className="mb-4 bg-[var(--ds-status-success-bg)] border border-[var(--ds-status-success)]/20 rounded-xl p-4">
-            <p className="text-sm text-[var(--ds-status-success-text)] font-medium">Modo local</p>
-            <p className="text-xs text-[var(--ds-text-secondary)] mt-1">
-              Para destravar o login no localhost, defina <code className="bg-[var(--ds-bg-surface)] px-1.5 py-0.5 rounded">MASTER_PASSWORD</code> no <code className="bg-[var(--ds-bg-surface)] px-1.5 py-0.5 rounded">.env.local</code> e reinicie o dev server.
-            </p>
-          </div>
-        )}
-
         <form onSubmit={handleSubmit}>
           <div className="relative">
             <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--ds-text-muted)]" />
@@ -148,7 +138,7 @@ function LoginForm() {
 
           <button
             type="submit"
-            disabled={isLoading || (!isConfigured && isLocalhost)}
+            disabled={isLoading || !isConfigured}
             className="w-full mt-6 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
           >
             {isLoading ? (

@@ -18,26 +18,57 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Validar token fazendo uma requisição de listagem de schedules
-    // Este endpoint aceita GET e retorna 200 se o token for válido
-    const qstashRes = await fetch('https://qstash.upstash.io/v2/schedules', {
+    // Validar formato antes de chamar API
+    const trimmedToken = token.trim();
+    const isValidFormat = 
+      trimmedToken.startsWith('eyJ') || 
+      trimmedToken.startsWith('qstash_') ||
+      trimmedToken.split('.').length === 3;
+
+    if (!isValidFormat) {
+      return NextResponse.json(
+        { error: 'Formato de token inválido. Use um token que começa com "eyJ" ou "qstash_"' },
+        { status: 400 }
+      );
+    }
+
+    // Tentar primeiro endpoint mais permissivo
+    let qstashRes = await fetch('https://qstash.upstash.io/v2/events', {
       method: 'GET',
       headers: {
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${trimmedToken}`,
       },
     });
 
+    // Se /events falhar com 403 ou 404, tentar /schedules como fallback
+    if (qstashRes.status === 403 || qstashRes.status === 404) {
+      qstashRes = await fetch('https://qstash.upstash.io/v2/schedules', {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${trimmedToken}`,
+        },
+      });
+    }
+
     if (!qstashRes.ok) {
-      if (qstashRes.status === 401 || qstashRes.status === 403) {
+      if (qstashRes.status === 401) {
         return NextResponse.json(
-          { error: 'Token QStash inválido ou sem permissões' },
+          { error: 'Token QStash inválido. Verifique se copiou o token completo do console Upstash.' },
           { status: 401 }
         );
       }
 
+      if (qstashRes.status === 403) {
+        return NextResponse.json(
+          { error: 'Token sem permissões. Certifique-se de usar o QSTASH_TOKEN (não o Current/Next Signing Key).' },
+          { status: 403 }
+        );
+      }
+
       const errorText = await qstashRes.text().catch(() => '');
+
       return NextResponse.json(
-        { error: `Erro ao validar token: ${errorText || qstashRes.statusText}` },
+        { error: `Erro ao validar: ${errorText || qstashRes.statusText}` },
         { status: qstashRes.status }
       );
     }
@@ -48,9 +79,9 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (error) {
-    console.error('[installer/qstash/validate] Erro:', error);
+    console.error('QStash validation error:', error);
     return NextResponse.json(
-      { error: 'Erro interno ao validar token' },
+      { error: 'Erro de conexão ao validar token. Verifique sua internet e tente novamente.' },
       { status: 500 }
     );
   }
