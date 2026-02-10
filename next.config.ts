@@ -28,7 +28,8 @@ const securityHeaders = [
 ] satisfies Array<{ key: string; value: string }>
 
 const nextConfig: NextConfig = {
-  // Next.js 16 uses Turbopack by default
+  // Turbopack disabled via TURBOPACK=0 env var in package.json scripts
+  // Using Webpack bundler for stability in sandbox environment
   reactStrictMode: true,
 
   // Hide framework fingerprinting header
