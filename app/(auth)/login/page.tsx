@@ -66,6 +66,10 @@ function LoginForm() {
       const data = await response.json()
 
       if (!response.ok) {
+        // Special handling for configuration error
+        if (response.status === 503 && data.needsConfiguration) {
+          setIsConfigured(false)
+        }
         throw new Error(data.error || 'Erro ao fazer login')
       }
 
